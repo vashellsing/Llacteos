@@ -172,24 +172,43 @@ export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
   showToast,
 }) => {
   const isYogur = productType === 'yogur';
+  const isKumis = productType === 'kumis';
   const state = batch.envasado;
   const pasteurizacion = (batch as any).pasteurizacion || {};
-  const lecheBaseLitros = pasteurizacion.litrosLeche || 100;
+
+  // Desviaciones a sub-lotes
+  const extraccionKumisLitros = pasteurizacion.extraccionKumis?.realizado
+    ? Number(pasteurizacion.extraccionKumis.litrosExtraidos) || 0
+    : 0;
+  const extraccionGriegoLitros = pasteurizacion.extraccionGriego?.realizado
+    ? Number(pasteurizacion.extraccionGriego.litrosExtraidos) || 0
+    : 0;
+  const totalDesviadoSublotes = extraccionKumisLitros + extraccionGriegoLitros;
+
+  // Volumen Base Neto para este sub-lote específico:
+  // - Para Kumis: volumen desviado para Kumis (pasteurizacion.litrosLeche)
+  // - Para Yogur: volumen remanente (pasteurizacion.litrosLeche ya recalculado)
+  const lecheBaseLitros = Number(pasteurizacion.litrosLeche ?? 0);
 
   // Lógica condicional: Con Azúcar vs Sin Azúcar (Stevia)
-  const isConAzucar =
-    llevaAzucar !== undefined
-      ? llevaAzucar
-      : pasteurizacion.llevaAzucar !== undefined
-      ? pasteurizacion.llevaAzucar
-      : true;
+  // Regla estricta Kumis: Kumis maneja exclusivamente Botella de 1 L y Botella de 2 L
+  const isConAzucar = isKumis
+    ? true
+    : llevaAzucar !== undefined
+    ? llevaAzucar
+    : pasteurizacion.llevaAzucar !== undefined
+    ? pasteurizacion.llevaAzucar
+    : true;
 
   const allActiveConfigs = useMemo(() => {
+    if (isKumis) {
+      return FORMAT_CONFIGS_KUMIS_CON_AZUCAR;
+    }
     if (isConAzucar) {
-      return isYogur ? FORMAT_CONFIGS_YOGUR_CON_AZUCAR : FORMAT_CONFIGS_KUMIS_CON_AZUCAR;
+      return FORMAT_CONFIGS_YOGUR_CON_AZUCAR;
     }
     return ALL_FORMAT_CONFIGS_SIN_AZUCAR;
-  }, [isConAzucar, isYogur]);
+  }, [isConAzucar, isKumis]);
 
   // =========================================================================
   // PASO 01: CONTEO DE ENVASES Y EDICIÓN MANUAL
@@ -416,14 +435,14 @@ export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
     <div className="flex flex-col w-full p-4 lg:p-6 gap-5 bg-[#fcfaf7] min-h-[calc(100vh-4rem)] pb-16">
       {/* CABECERA ESTÁNDAR MAESTRA */}
       <StageHeader
-        stageNumber={4}
-        totalStages={4}
+        stageNumber={isKumis ? 3 : 4}
+        totalStages={isKumis ? 3 : 4}
         lineName={
           isYogur
             ? `Línea de Fermentados · Yogur (${isConAzucar ? 'Con Azúcar' : 'Sin Azúcar - Stevia'})`
-            : `Línea de Fermentados · Kumis (${isConAzucar ? 'Con Azúcar' : 'Sin Azúcar - Stevia'})`
+            : 'Línea de Fermentados · Kumis Tradicional'
         }
-        title="4. Envasar y Guardar"
+        title={isKumis ? '3. Envasar y Guardar' : '4. Envasar y Guardar'}
         subtitle={
           isConAzucar
             ? 'Conteo de envases por presentación comercial, balance y rendimiento del lote, y traslado final a cuarto frío.'
@@ -576,20 +595,34 @@ export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
       <Card
         stepBadge="Paso 02"
         title="Balance del Lote y Rendimiento"
-        subtitle="Comparación entre la leche base inicial y el volumen envasado para determinar la merma del proceso."
+        subtitle={
+          isKumis
+            ? 'Cálculo de rendimiento y balance calculado estrictamente sobre el volumen desviado para Kumis.'
+            : totalDesviadoSublotes > 0
+            ? `Cálculo de rendimiento sobre el volumen neto remanente (${lecheBaseLitros} L) tras desviar ${totalDesviadoSublotes} L a sub-lotes.`
+            : 'Comparación entre la leche base inicial y el volumen envasado para determinar la merma del proceso.'
+        }
         icon="scale"
         tone="default"
       >
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="p-4 rounded-xl bg-[#fcfaf7] border border-[#e6decb]">
             <span className="text-[11px] font-bold uppercase text-[#5d564a]">
-              Leche Base del Lote
+              {isKumis
+                ? 'Volumen Base Extraído (Kumis)'
+                : totalDesviadoSublotes > 0
+                ? 'Volumen Neto Remanente (Yogur)'
+                : 'Leche Base del Lote'}
             </span>
             <div className="text-2xl font-black font-mono text-[#1e1b18] mt-1">
               {lecheBaseLitros} L
             </div>
             <span className="text-[11px] text-[#7a7164] mt-1 block">
-              Litros procesados desde Etapa 1
+              {isKumis
+                ? 'Volumen desviado exclusivamente para Kumis'
+                : totalDesviadoSublotes > 0
+                ? `Remanente tras desviar ${totalDesviadoSublotes} L a sub-lotes`
+                : 'Litros procesados desde Etapa 1'}
             </span>
           </div>
 

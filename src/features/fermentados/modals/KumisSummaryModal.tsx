@@ -105,17 +105,17 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
   const hasAzucar = Boolean(llevaAzucar);
 
   const variedadAzucar = batidoYAdiciones.adiciones.variedadAzucar || {
-    litrosBase: pasteurizacion.litrosLeche || 100,
+    litrosBase: pasteurizacion.litrosLeche ?? 0,
     gramosAzucar: 4000,
     kilosAzucar: 4.0,
     loteAzucar: 'AZ-KUM-2026',
   };
 
   const loteAzucar = hasAzucar
-    ? (pasteurizacion.loteAzucar || batidoYAdiciones.adiciones?.variedadAzucar?.loteAzucar || (batidoYAdiciones.adiciones as any)?.loteAzucar || 'AZ-KUM-2026')
+    ? (pasteurizacion.azucar?.loteAzucar || pasteurizacion.loteAzucar || batidoYAdiciones.adiciones?.variedadAzucar?.loteAzucar || (batidoYAdiciones.adiciones as any)?.loteAzucar || 'AZ-KUM-2026')
     : '';
   const pesoAzucarKg = hasAzucar
-    ? (variedadAzucar.kilosAzucar || (pasteurizacion.cantidadAzucarKg ?? Number(((variedadAzucar.litrosBase / 40) * 3.2).toFixed(2))))
+    ? (variedadAzucar.kilosAzucar || (pasteurizacion.azucar?.cantidadKg ?? pasteurizacion.cantidadAzucarKg ?? Number(((variedadAzucar.litrosBase / 40) * 3.2).toFixed(2))))
     : 0;
 
   // Lote Estevia si se utilizó
@@ -130,17 +130,18 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
   const hasEstevia = Boolean(!hasAzucar && (loteEsteviaRegistrado || gramosEsteviaRegistrados > 0));
   const hasNatural = !hasAzucar && !hasEstevia;
 
-  // 3. Balance de masa y rendimiento
-  const lecheBaseLitros = pasteurizacion.litrosLeche || 100;
+  // 3. Balance de masa y rendimiento sobre volumen extraído para Kumis
+  const lecheBaseLitros = pasteurizacion.litrosLeche ?? 0;
   const lecheKg = Math.round(lecheBaseLitros * 1.03 * 100) / 100;
   const totalAdicionesKg = Math.round(pesoAzucarKg * 100) / 100;
   const masaTotalFormuladaKg = Math.round((lecheKg + totalAdicionesKg) * 100) / 100;
 
   const rendimientoPct =
-    masaTotalFormuladaKg > 0
-      ? Math.min(105, Math.round((totalKilosEnvasados / masaTotalFormuladaKg) * 1000) / 10)
+    lecheBaseLitros > 0
+      ? Number(((totalLitrosEnvasados / lecheBaseLitros) * 100).toFixed(1))
       : 0;
   const mermaKg = Math.max(0, Math.round((masaTotalFormuladaKg - totalKilosEnvasados) * 100) / 100);
+  const mermaLitros = Math.max(0, Number((lecheBaseLitros - totalLitrosEnvasados).toFixed(2)));
 
   // Handlers para operarios
   const handleAddOperator = (nameToAdd: string) => {
@@ -370,7 +371,7 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
                       </strong>
                     </div>
                     <div className="mt-2 pt-2 border-t border-blue-100 flex items-center justify-between text-[10px]">
-                      <span className="text-gray-500">Volumen:</span>
+                      <span className="text-gray-500">Volumen Extraído (Kumis):</span>
                       <span className="font-bold text-blue-900">{lecheBaseLitros} L</span>
                     </div>
                     <span className="text-[9px] text-emerald-700 font-semibold mt-1">

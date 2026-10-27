@@ -153,4 +153,20 @@ export const computeDurationBetweenTimes = (
   };
 };
 
+/**
+ * Convierte una hora en formato string ("hh:mm:ss a" o "HH:mm:ss")
+ * a un timestamp en milisegundos correspondiente a la fecha de hoy.
+ */
+export const timeStringToTimestampToday = (timeStr?: string | null): number => {
+  if (!timeStr) return Date.now();
+  const sec = timeStringToSecondsToday(timeStr);
+  const now = new Date();
+  const startOfDay = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  ).getTime();
+  return startOfDay + sec * 1000;
+};
+
 

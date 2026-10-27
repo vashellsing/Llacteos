@@ -10,12 +10,18 @@ export interface InoculacionStageYogurProps {
   horaLlegada45?: string | null;
   litrosLecheBase?: number;
   loteCultivoBase?: string;
+  llevaAzucar?: boolean;
   processTimer: ProcessTimerState;
   onNextStage?: () => void;
   onGoToBatidoYSabores?: () => void;
   onFinalizeProcess?: () => void;
   onOpenReviewModal?: () => void;
   showToast: (msg: string, type?: 'success' | 'info' | 'warning') => void;
+  onExtractKumis?: (litros: number) => void;
+  onExtractGriego?: (litros: number) => void;
+  extraccionKumisRealizada?: boolean;
+  extraccionGriegoRealizada?: boolean;
+  litrosExtraidosPrevios?: number;
 }
 
 export const InoculacionStageYogur: React.FC<InoculacionStageYogurProps> = ({
@@ -24,11 +30,17 @@ export const InoculacionStageYogur: React.FC<InoculacionStageYogurProps> = ({
   horaLlegada45,
   litrosLecheBase = 100,
   loteCultivoBase,
+  llevaAzucar,
   processTimer,
   onNextStage,
   onGoToBatidoYSabores,
   onOpenReviewModal,
   showToast,
+  onExtractKumis,
+  onExtractGriego,
+  extraccionKumisRealizada,
+  extraccionGriegoRealizada,
+  litrosExtraidosPrevios,
 }) => {
   return (
     <InoculacionStageCommon
@@ -38,11 +50,17 @@ export const InoculacionStageYogur: React.FC<InoculacionStageYogurProps> = ({
       horaLlegadaTemp={horaLlegada45}
       litrosLecheBase={litrosLecheBase}
       loteCultivoBase={loteCultivoBase}
+      llevaAzucar={llevaAzucar}
       processTimer={processTimer}
       onGoToBatidoYSabores={onGoToBatidoYSabores || onNextStage || (() => {})}
       onNextStage={onNextStage}
       onOpenReviewModal={onOpenReviewModal}
       showToast={showToast}
+      onExtractKumis={onExtractKumis}
+      onExtractGriego={onExtractGriego}
+      extraccionKumisRealizada={extraccionKumisRealizada}
+      extraccionGriegoRealizada={extraccionGriegoRealizada}
+      litrosExtraidosPrevios={litrosExtraidosPrevios}
     />
   );
 };

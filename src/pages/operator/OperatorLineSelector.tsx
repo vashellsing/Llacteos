@@ -5,16 +5,20 @@ interface OperatorLineSelectorProps {
   lines: ProductionLine[];
   currentUser: UserProfile;
   activeBatchId?: string | null;
+  activeBatchStatus?: string;
   onSelectLine: (lineId: string) => void;
   onContinueCurrentBatch: () => void;
+  onViewBatchSummary?: () => void;
 }
 
 export const OperatorLineSelector: React.FC<OperatorLineSelectorProps> = ({
   lines,
   currentUser,
   activeBatchId,
+  activeBatchStatus,
   onSelectLine,
   onContinueCurrentBatch,
+  onViewBatchSummary,
 }) => {
   const getLineTypeIcon = (type: ProductionLine['lineType']) => {
     switch (type) {
@@ -72,13 +76,23 @@ export const OperatorLineSelector: React.FC<OperatorLineSelectorProps> = ({
         </div>
 
         {activeBatchId && (
-          <button
-            onClick={onContinueCurrentBatch}
-            className="px-5 py-3 rounded-2xl bg-[#004ac6] hover:bg-blue-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
-          >
-            <span className="material-symbols-outlined text-[20px]">play_circle</span>
-            <span>Continuar Lote Activo ({activeBatchId})</span>
-          </button>
+          activeBatchStatus === 'COMPLETADO' ? (
+            <button
+              onClick={onViewBatchSummary || onContinueCurrentBatch}
+              className="px-5 py-3 rounded-2xl bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[20px]">visibility</span>
+              <span>Ver Resumen ({activeBatchId} · Cerrado)</span>
+            </button>
+          ) : (
+            <button
+              onClick={onContinueCurrentBatch}
+              className="px-5 py-3 rounded-2xl bg-[#004ac6] hover:bg-blue-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[20px]">play_circle</span>
+              <span>Continuar Lote Activo ({activeBatchId})</span>
+            </button>
+          )
         )}
       </div>
 
@@ -206,9 +220,17 @@ export const OperatorLineSelector: React.FC<OperatorLineSelectorProps> = ({
                 </div>
 
                 {isCurrentBatch && (
-                  <div className="mt-3 p-2.5 rounded-xl bg-blue-100/60 border border-blue-200 text-xs text-[#004ac6] flex items-center justify-between font-bold">
-                    <span>Lote Activo: {activeBatchId}</span>
-                    <span className="text-[10px] uppercase font-mono">En curso</span>
+                  <div
+                    className={`mt-3 p-2.5 rounded-xl border text-xs flex items-center justify-between font-bold ${
+                      activeBatchStatus === 'COMPLETADO'
+                        ? 'bg-slate-100 text-slate-700 border-slate-300'
+                        : 'bg-blue-100/60 border-blue-200 text-[#004ac6]'
+                    }`}
+                  >
+                    <span>Lote: {activeBatchId}</span>
+                    <span className="text-[10px] uppercase font-mono">
+                      {activeBatchStatus === 'COMPLETADO' ? '✓ Cerrado' : 'En curso'}
+                    </span>
                   </div>
                 )}
               </div>

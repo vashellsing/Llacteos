@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Badge,
   Button,
@@ -16,6 +16,7 @@ import {
   formatHumanDuration,
   formatTimeFromStep1,
   getCurrentTimeString,
+  timeStringToTimestampToday,
 } from '../../../utils/timer';
 import { useStageCountdown } from '../../../hooks/useStageCountdown';
 
@@ -67,6 +68,7 @@ export interface PasteurizacionStageCommonProps {
   onOpenReviewModal?: () => void;
   showToast: (msg: string, type?: 'success' | 'info' | 'warning') => void;
   onSplitParentBatch?: (input: SplitMilkAllocationInput) => void;
+  onExtractKumisChildBatch?: (litrosKumis: number) => void;
 }
 
 export const PasteurizacionStageCommon: React.FC<
@@ -81,7 +83,86 @@ export const PasteurizacionStageCommon: React.FC<
   onNextStage,
   showToast,
   onSplitParentBatch,
+  onExtractKumisChildBatch,
 }) => {
+  const isKumis = productName.toLowerCase().includes('kumis');
+  const isYogur =
+    productName.toLowerCase().includes('yogur') &&
+    !productName.toLowerCase().includes('griego');
+  const isYogurConAzucar = isYogur && state.llevaAzucar !== false;
+  const targetCoolingTemp = isKumis ? 35.0 : 45.0;
+  const targetCoolingTempStr = isKumis ? '35 °C' : '45 °C';
+  const coolingStepTitle = isKumis
+    ? '¡La base se enfrió a 35 °C!'
+    : '¡La leche se enfrió a 45 °C!';
+
+  // Estados para modal de extracción de base para Kumis (Punto de Quiebre)
+  const [showModalExtraccion, setShowModalExtraccion] = useState<boolean>(false);
+  const [litrosKumisInput, setLitrosKumisInput] = useState<string>('');
+  const [errorExtraccion, setErrorExtraccion] = useState<string | null>(null);
+
+  const prevExtraidosKumis = state.extraccionKumis?.litrosExtraidos || 0;
+  const volumenTotalDisponible = state.litrosLeche + prevExtraidosKumis;
+
+  const parsedLitrosKumis =
+    litrosKumisInput === '' ? 0 : Number(litrosKumisInput);
+  const esExtraccionValida =
+    parsedLitrosKumis > 0 && parsedLitrosKumis <= volumenTotalDisponible;
+
+  const handleOpenModalExtraccion = () => {
+    setLitrosKumisInput(prevExtraidosKumis > 0 ? String(prevExtraidosKumis) : '');
+    setErrorExtraccion(null);
+    setShowModalExtraccion(true);
+  };
+
+  const handleConfirmarExtraccion = () => {
+    if (!parsedLitrosKumis || parsedLitrosKumis <= 0) {
+      setErrorExtraccion('La cantidad debe ser mayor a 0 litros.');
+      return;
+    }
+    if (parsedLitrosKumis > volumenTotalDisponible) {
+      setErrorExtraccion(
+        `Los litros extraídos no pueden superar el volumen total disponible (${volumenTotalDisponible} L).`
+      );
+      return;
+    }
+
+    const litrosDesviados = parsedLitrosKumis;
+    const nuevoVolumenYogur = Math.max(0, volumenTotalDisponible - litrosDesviados);
+    const nuevoAzucarKg = Number(((nuevoVolumenYogur / 40) * 3.2).toFixed(2));
+    const timeStr = getCurrentTimeString();
+
+    if (onExtractKumisChildBatch) {
+      onExtractKumisChildBatch(litrosDesviados);
+    } else {
+      onChange((prev: any) => ({
+        ...prev,
+        litrosLeche: nuevoVolumenYogur,
+        extraccionKumis: {
+          realizado: true,
+          litrosExtraidos: litrosDesviados,
+          hora: timeStr,
+        },
+        azucar: {
+          ...prev.azucar,
+          cantidadKg: prev.azucar?.esManual
+            ? prev.azucar.cantidadKg
+            : nuevoAzucarKg,
+        },
+      }));
+      showToast(
+        nuevoVolumenYogur === 0
+          ? `✓ Desvío total de ${litrosDesviados} L para Kumis. El lote de Yogur queda en 0 L (Completado).`
+          : `✓ Se extrajeron ${litrosDesviados} L para Kumis. El Yogur continúa con ${nuevoVolumenYogur} L.`,
+        'success'
+      );
+    }
+
+    setShowModalExtraccion(false);
+    setLitrosKumisInput('');
+    setErrorExtraccion(null);
+  };
+
   // Fórmula de planta: 3.2 kg por cada 40 L de leche fresca (80 g / L)
   const azucarSugeridoKg =
     state.litrosLeche > 0
@@ -157,7 +238,11 @@ export const PasteurizacionStageCommon: React.FC<
 
   // Cronómetros en vivo
   const calentamientoTimer = useStageCountdown({
-    startTimestamp: state.calentamiento?.timestampInicio,
+    startTimestamp:
+      state.calentamiento?.timestampInicio ||
+      (state.calentamiento?.horaInicio
+        ? timeStringToTimestampToday(state.calentamiento.horaInicio)
+        : null),
     isRunning: Boolean(
       state.calentamiento?.iniciado && !state.calentamiento?.completado
     ),
@@ -166,7 +251,11 @@ export const PasteurizacionStageCommon: React.FC<
   });
 
   const sostenimientoTimer = useStageCountdown({
-    startTimestamp: state.sostenimiento?.timestampInicio,
+    startTimestamp:
+      state.sostenimiento?.timestampInicio ||
+      (state.sostenimiento?.horaInicio
+        ? timeStringToTimestampToday(state.sostenimiento.horaInicio)
+        : null),
     isRunning: Boolean(
       state.sostenimiento?.iniciado && !state.sostenimiento?.completado
     ),
@@ -175,8 +264,25 @@ export const PasteurizacionStageCommon: React.FC<
     completedDurationText: state.sostenimiento?.duracionReal,
   });
 
+  const timestampEnfriamientoEfectivo = useMemo(() => {
+    if (state.enfriamiento?.timestampInicioEnfriamiento) {
+      return state.enfriamiento.timestampInicioEnfriamiento;
+    }
+    const hora =
+      state.enfriamiento?.horaInicio ||
+      (state.enfriamiento as any)?.horaInicioEnfriamiento;
+    if (hora) {
+      return timeStringToTimestampToday(hora);
+    }
+    return null;
+  }, [
+    state.enfriamiento?.timestampInicioEnfriamiento,
+    state.enfriamiento?.horaInicio,
+    (state.enfriamiento as any)?.horaInicioEnfriamiento,
+  ]);
+
   const enfriamientoTimer = useStageCountdown({
-    startTimestamp: state.enfriamiento?.timestampInicioEnfriamiento,
+    startTimestamp: timestampEnfriamientoEfectivo,
     isRunning: Boolean(
       state.enfriamiento?.enfriamientoIniciado &&
         !state.enfriamiento?.enfriamientoCompletado
@@ -186,11 +292,35 @@ export const PasteurizacionStageCommon: React.FC<
   });
 
   const trasiegoTimer = useStageCountdown({
-    startTimestamp: state.trasiego?.timestampInicio,
+    startTimestamp:
+      state.trasiego?.timestampInicio ||
+      (state.trasiego?.horaInicio
+        ? timeStringToTimestampToday(state.trasiego.horaInicio)
+        : null),
     isRunning: Boolean(state.trasiego?.iniciado && !state.trasiego?.completado),
     isCompleted: Boolean(state.trasiego?.completado),
     completedDurationText: state.trasiego?.tiempoTrasiego,
   });
+
+  // Referencia y auto-scroll a Paso 4 (Enfriamiento a 35 °C) para Kumis
+  const paso4Ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (
+      isKumis &&
+      state.sostenimiento?.completado &&
+      !state.enfriamiento?.enfriamientoCompletado
+    ) {
+      const timer = setTimeout(() => {
+        paso4Ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    isKumis,
+    state.sostenimiento?.completado,
+    state.enfriamiento?.enfriamientoCompletado,
+  ]);
 
   // Duraciones recalculadas en tiempo real para modo manual
   const duracionCalentamientoRecalculada = useMemo(() => {
@@ -365,11 +495,13 @@ export const PasteurizacionStageCommon: React.FC<
     const durCalStr = state.calentamiento?.horaInicio
       ? computeDurationBetweenTimes(state.calentamiento.horaInicio, timeStr).human
       : state.calentamiento?.tiempoCalentamiento || '0 s';
+    const newTimestampSostenimiento = timeStringToTimestampToday(timeStr);
 
     onChange((prev: any) => {
       const nuevoSostenimiento = {
         ...prev.sostenimiento,
         horaInicio: timeStr,
+        timestampInicio: newTimestampSostenimiento,
       };
       if (prev.sostenimiento?.completado && prev.sostenimiento?.horaFin) {
         nuevoSostenimiento.duracionReal = computeDurationBetweenTimes(
@@ -399,7 +531,7 @@ export const PasteurizacionStageCommon: React.FC<
     );
   };
 
-  // Paso 3: Fin de Retención (Min. 15 min)
+  // Paso 3: Fin de Retención (Min. 15 min) -> Arranca Enfriamiento inmediatamente (choque térmico sin pausas)
   const handleTerminarRetencion = () => {
     const timeStr = getCurrentTimeString();
     const now = Date.now();
@@ -433,7 +565,7 @@ export const PasteurizacionStageCommon: React.FC<
 
     setHoraManualPaso3(timeStr);
     showToast(
-      `✓ Retención completada a las ${timeStr} (${durSostStr}). Inicia enfriamiento a 45 °C.`,
+      `✓ Retención completada a las ${timeStr} (${durSostStr}). Choque térmico iniciado: enfriando a ${targetCoolingTempStr}.`,
       'success'
     );
   };
@@ -445,11 +577,13 @@ export const PasteurizacionStageCommon: React.FC<
     const durSostStr = startSost
       ? computeDurationBetweenTimes(startSost, timeStr).human
       : state.sostenimiento?.duracionReal || '0 s';
+    const newTimestampEnfriamiento = timeStringToTimestampToday(timeStr);
 
     onChange((prev: any) => {
       const nuevoEnfriamiento = {
         ...prev.enfriamiento,
         horaInicio: timeStr,
+        timestampInicioEnfriamiento: newTimestampEnfriamiento,
       };
       if (
         prev.enfriamiento?.enfriamientoCompletado &&
@@ -479,7 +613,7 @@ export const PasteurizacionStageCommon: React.FC<
     );
   };
 
-  // Paso 4: Enfriamiento a 45 °C
+  // Paso 4: Enfriamiento (45 °C para Yogur, 35 °C para Kumis)
   const handleLlego45 = () => {
     const timeStr = getCurrentTimeString();
     const now = Date.now();
@@ -505,7 +639,7 @@ export const PasteurizacionStageCommon: React.FC<
         enfriamientoCompletado: true,
         horaFinEnfriamiento: timeStr,
         tiempoEnfriamiento: durEnfStr,
-        temperaturaFinal: 45.0,
+        temperaturaFinal: targetCoolingTemp,
       },
       trasiego: {
         ...prev.trasiego,
@@ -518,7 +652,9 @@ export const PasteurizacionStageCommon: React.FC<
 
     setHoraManualPaso4(timeStr);
     showToast(
-      `✓ Leche enfriada a 45 °C a las ${timeStr} (${durEnfStr}). Inicia traslado a cantinas.`,
+      isKumis
+        ? `✓ Base enfriada a 35 °C a las ${timeStr} (${durEnfStr}). Inicia traslado a cantinas.`
+        : `✓ Leche enfriada a 45 °C a las ${timeStr} (${durEnfStr}). Inicia traslado a cantinas.`,
       'success'
     );
   };
@@ -530,11 +666,13 @@ export const PasteurizacionStageCommon: React.FC<
     const durEnfStr = startEnf
       ? computeDurationBetweenTimes(startEnf, timeStr).human
       : state.enfriamiento?.tiempoEnfriamiento || '0 s';
+    const newTimestampTrasiego = timeStringToTimestampToday(timeStr);
 
     onChange((prev: any) => {
       const nuevoTrasiego = {
         ...prev.trasiego,
         horaInicio: timeStr,
+        timestampInicio: newTimestampTrasiego,
       };
       if (prev.trasiego?.completado && prev.trasiego?.horaFin) {
         nuevoTrasiego.tiempoTrasiego = computeDurationBetweenTimes(
@@ -549,7 +687,7 @@ export const PasteurizacionStageCommon: React.FC<
           enfriamientoCompletado: true,
           horaFinEnfriamiento: timeStr,
           tiempoEnfriamiento: durEnfStr,
-          temperaturaFinal: 45.0,
+          temperaturaFinal: targetCoolingTemp,
           esManual: true,
         },
         trasiego: nuevoTrasiego,
@@ -558,7 +696,7 @@ export const PasteurizacionStageCommon: React.FC<
 
     setManualPaso4(false);
     showToast(
-      `✓ Hora de enfriamiento a 45 °C actualizada a las ${timeStr} (${durEnfStr}). Sincronizado.`,
+      `✓ Hora de enfriamiento a ${targetCoolingTempStr} actualizada a las ${timeStr} (${durEnfStr}). Sincronizado.`,
       'success'
     );
   };
@@ -626,9 +764,13 @@ export const PasteurizacionStageCommon: React.FC<
     <div className="flex flex-col w-full p-4 lg:p-6 gap-6 bg-[#fcfaf7] min-h-[calc(100vh-4rem)] pb-12">
       <StageHeader
         stageNumber={1}
-        totalStages={4}
+        totalStages={isKumis ? 3 : 4}
         title={`Pasteurización (${productName})`}
-        subtitle="Control térmico inquebrantable: Calentamiento a 85–90 °C, retención de 15 min, enfriamiento a 45 °C y traslado a cantinas."
+        subtitle={
+          isKumis
+            ? 'Control térmico inquebrantable: Calentamiento a 85–90 °C, retención de 15 min, enfriamiento a 35 °C y traslado a cantinas.'
+            : 'Control térmico inquebrantable: Calentamiento a 85–90 °C, retención de 15 min, enfriamiento a 45 °C y traslado a cantinas.'
+        }
         productName={productName}
         icon="local_fire_department"
         isCompleted={isCompletedStage}
@@ -675,11 +817,13 @@ export const PasteurizacionStageCommon: React.FC<
         subtitle="Registra los litros de leche fresca, los lotes de materia prima y selecciona si este lote lleva azúcar."
         icon="inventory_2"
         badge={
-          state.llevaAzucar
+          isKumis
+            ? `✓ Base Kumis: ${state.litrosLeche} L (Azúcar: ${state.azucar?.cantidadKg || 0} kg)`
+            : state.llevaAzucar
             ? 'Formulación: Con Azúcar (3.2 kg / 40 L)'
             : 'Formulación: Sin Azúcar (Natural)'
         }
-        variant="default"
+        variant={isKumis ? 'success' : 'default'}
       >
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -796,7 +940,8 @@ export const PasteurizacionStageCommon: React.FC<
         badge={
           state.calentamiento?.completado
             ? `✓ Calentamiento: ${
-                state.calentamiento?.tiempoCalentamiento || 'Finalizado'
+                state.calentamiento?.tiempoCalentamiento ||
+                (isKumis ? '45 min (Heredado)' : 'Finalizado')
               }`
             : state.calentamiento?.iniciado
             ? 'En calentamiento...'
@@ -887,7 +1032,9 @@ export const PasteurizacionStageCommon: React.FC<
           icon="cookie"
           badge={
             state.azucar?.adicionado
-              ? `✓ Agregada a las ${state.azucar?.horaAdicion}`
+              ? `✓ Agregada a las ${state.azucar?.horaAdicion}${
+                  isKumis ? ' (Heredado)' : ''
+                }`
               : 'Pendiente a los 60 °C'
           }
           variant={state.azucar?.adicionado ? 'success' : 'default'}
@@ -1034,8 +1181,9 @@ export const PasteurizacionStageCommon: React.FC<
           state.calentamiento?.completado
             ? `✓ Llegó a las ${
                 state.calentamiento?.horaFin ||
-                state.calentamiento?.horaLlegada85a90
-              }`
+                state.calentamiento?.horaLlegada85a90 ||
+                '--'
+              }${isKumis ? ' (Heredado)' : ''}`
             : 'En espera de 85–90 °C'
         }
         variant={state.calentamiento?.completado ? 'success' : 'default'}
@@ -1154,7 +1302,9 @@ export const PasteurizacionStageCommon: React.FC<
         icon="timer"
         badge={
           state.sostenimiento?.completado
-            ? `✓ Retención: ${state.sostenimiento?.duracionReal || 'Listo'}`
+            ? `✓ Retención: ${
+                state.sostenimiento?.duracionReal || '15 min'
+              }${isKumis ? ' (Heredado)' : ''}`
             : state.sostenimiento?.iniciado
             ? 'Retención en curso (Min. 15 min)'
             : 'En espera del Paso 2'
@@ -1183,7 +1333,11 @@ export const PasteurizacionStageCommon: React.FC<
         <div className="space-y-4">
           <TimerBanner
             title="Retención Térmica a 85–90 °C"
-            subtitle="Garantiza la pasteurización completa de la leche antes de enfriar a 45 °C."
+            subtitle={
+              isKumis
+                ? 'Garantiza la pasteurización completa de la base antes de enfriar a 35 °C.'
+                : 'Garantiza la pasteurización completa de la leche antes de enfriar a 45 °C.'
+            }
             elapsedSeconds={
               state.sostenimiento?.completado
                 ? 900
@@ -1198,7 +1352,7 @@ export const PasteurizacionStageCommon: React.FC<
 
           {!manualPaso3 ? (
             !state.sostenimiento?.completado ? (
-              <div className="pt-2">
+              <div className="space-y-3 pt-2">
                 <Button
                   variant="primary"
                   size="xl"
@@ -1210,34 +1364,79 @@ export const PasteurizacionStageCommon: React.FC<
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-xl bg-white border border-[#e6decb]">
-                  <span className="text-[10px] uppercase font-bold text-gray-500 block">
-                    INICIO DE RETENCIÓN
-                  </span>
-                  <span className="text-xl font-mono font-black text-gray-900 mt-1 block">
-                    {state.sostenimiento?.horaInicio}
-                  </span>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-xl bg-white border border-[#e6decb]">
+                    <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                      INICIO DE RETENCIÓN
+                    </span>
+                    <span className="text-xl font-mono font-black text-gray-900 mt-1 block">
+                      {state.sostenimiento?.horaInicio}
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-white border border-[#e6decb]">
+                    <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                      FIN DE RETENCIÓN
+                    </span>
+                    <span className="text-xl font-mono font-black text-emerald-900 mt-1 block">
+                      {state.sostenimiento?.horaFin}
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300">
+                    <span className="text-[10px] uppercase font-bold text-emerald-800 block">
+                      DURACIÓN REAL DE RETENCIÓN (SOLO LECTURA)
+                    </span>
+                    <span className="text-xl font-mono font-black text-emerald-950 mt-1 block">
+                      {state.sostenimiento?.duracionReal}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-white border border-[#e6decb]">
-                  <span className="text-[10px] uppercase font-bold text-gray-500 block">
-                    FIN DE RETENCIÓN
-                  </span>
-                  <span className="text-xl font-mono font-black text-emerald-900 mt-1 block">
-                    {state.sostenimiento?.horaFin}
-                  </span>
-                </div>
-
-                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300">
-                  <span className="text-[10px] uppercase font-bold text-emerald-800 block">
-                    DURACIÓN REAL DE RETENCIÓN (SOLO LECTURA)
-                  </span>
-                  <span className="text-xl font-mono font-black text-emerald-950 mt-1 block">
-                    {state.sostenimiento?.duracionReal}
-                  </span>
-                </div>
-              </div>
+                {/* PUNTO DE INTERCEPCIÓN (EL QUIEBRE): ¿EXTRAER BASE PARA KUMIS? */}
+                {isYogurConAzucar && state.sostenimiento?.completado && (
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50/50 to-amber-50/60 border-2 border-purple-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mt-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-purple-700 text-white flex items-center justify-center shrink-0 shadow-md shadow-purple-700/20">
+                        <span className="material-symbols-outlined text-[24px]">
+                          call_split
+                        </span>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-black text-purple-950">
+                            Punto de Quiebre: ¿Deseas extraer base para Kumis?
+                          </h4>
+                          <Badge variant="default" className="bg-purple-100 text-purple-800 border-purple-200" size="sm">
+                            {state.extraccionKumis?.realizado
+                              ? 'Extraído'
+                              : 'Opcional'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-purple-900/80 mt-0.5">
+                          {state.extraccionKumis?.realizado
+                            ? `✓ Base para Kumis extraída: ${state.extraccionKumis.litrosExtraidos} L a las ${state.extraccionKumis.hora}. Lote de Yogur actual: ${state.litrosLeche} L.`
+                            : 'La leche está pasteurizada a 85–90 °C con azúcar. Puedes desviar una porción para el Lote Hijo de Kumis antes de iniciar el enfriamiento.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <Button
+                        variant="primary"
+                        size="md"
+                        icon="call_split"
+                        onClick={handleOpenModalExtraccion}
+                        className="font-bold bg-purple-700 text-white hover:bg-purple-800 shadow-md shadow-purple-700/20 cursor-pointer"
+                      >
+                        {state.extraccionKumis?.realizado
+                          ? 'Modificar / Extraer Más'
+                          : '¿Extraer base para Kumis?'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )
           ) : (
             <div className="p-4 rounded-xl bg-amber-50/90 border-2 border-amber-300 flex flex-col gap-3">
@@ -1278,161 +1477,186 @@ export const PasteurizacionStageCommon: React.FC<
       </Card>
 
       {/* =========================================================================
-          6. PASO 4: ENFRIAMIENTO (A 45 °C)
+          6. PASO 4: ENFRIAMIENTO (A 45 °C PARA YOGUR / 35 °C PARA KUMIS)
       ========================================================================= */}
-      <Card
-        title="¡La leche se enfrió a 45 °C!"
-        subtitle="Mide el tiempo desde el fin de la retención. Al confirmar, calcula la duración e inicia el reloj de traslado."
-        icon="ac_unit"
-        badge={
-          state.enfriamiento?.enfriamientoCompletado
-            ? `✓ Enfriada: ${
-                state.enfriamiento?.tiempoEnfriamiento || 'Listo'
-              }`
-            : state.enfriamiento?.enfriamientoIniciado
-            ? 'Enfriando a 45 °C...'
-            : 'En espera del Paso 3'
-        }
-        variant={
-          state.enfriamiento?.enfriamientoCompletado
-            ? 'success'
-            : state.enfriamiento?.enfriamientoIniciado
-            ? 'info'
-            : 'locked'
-        }
-        headerRight={
-          state.enfriamiento?.enfriamientoCompletado ? (
-            <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-gray-700 bg-white px-3 py-1.5 rounded-xl border border-gray-300 shadow-2xs hover:border-amber-400 transition-all">
-              <input
-                type="checkbox"
-                checked={manualPaso4}
-                onChange={(e) => setManualPaso4(e.target.checked)}
-                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
-              />
-              <span>Habilitar edición manual</span>
-            </label>
-          ) : undefined
-        }
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl bg-white border border-[#e6decb]">
-              <span className="text-[10px] uppercase font-bold text-gray-500 block">
-                TEMPERATURA OBJETIVO DE ENFRIAMIENTO
-              </span>
-              <span className="text-2xl font-black font-mono text-blue-900 mt-1 block">
-                45.0 °C
-              </span>
-              <span className="text-[11px] text-gray-500">
-                Temperatura óptima para la siembra del cultivo
-              </span>
-            </div>
-
-            <div className="p-4 rounded-xl bg-blue-50 border border-blue-200">
-              <span className="text-[10px] uppercase font-bold text-blue-800 block">
-                CRONÓMETRO DE ENFRIAMIENTO
-              </span>
-              <span className="text-2xl font-black font-mono text-blue-950 mt-1 block">
-                {state.enfriamiento?.enfriamientoCompletado
-                  ? state.enfriamiento?.tiempoEnfriamiento || 'Listo'
-                  : enfriamientoTimer.humanElapsed}
-              </span>
-              <span className="text-[11px] text-blue-800 font-medium">
-                {state.enfriamiento?.enfriamientoCompletado
-                  ? 'Enfriamiento finalizado'
-                  : 'Circulando agua fría por la chaqueta...'}
-              </span>
-            </div>
-          </div>
-
-          {!manualPaso4 ? (
-            !state.enfriamiento?.enfriamientoCompletado ? (
-              <div className="pt-2">
-                <Button
-                  variant="primary"
-                  size="xl"
-                  icon="ac_unit"
-                  onClick={handleLlego45}
-                  disabled={!state.enfriamiento?.enfriamientoIniciado}
-                  className="bg-blue-600 text-white hover:bg-blue-700 transition-colors font-bold shadow-md shadow-blue-600/20"
-                >
-                  ¡La leche se enfrió a 45 °C!
-                </Button>
+      <div ref={paso4Ref} id="paso-enfriamiento-35" className="scroll-mt-6">
+        <Card
+          title={coolingStepTitle}
+          subtitle={
+            isKumis
+              ? 'Mide el tiempo desde el fin de la retención. Al confirmar, calcula la duración hacia 35 °C e inicia el traslado a cantinas.'
+              : 'Mide el tiempo desde el fin de la retención. Al confirmar, calcula la duración e inicia el reloj de traslado.'
+          }
+          icon="ac_unit"
+          badge={
+            state.enfriamiento?.enfriamientoCompletado
+              ? `✓ Enfriada: ${
+                  state.enfriamiento?.tiempoEnfriamiento || 'Listo'
+                }`
+              : state.enfriamiento?.enfriamientoIniciado
+              ? `Enfriando a ${targetCoolingTempStr}...`
+              : state.sostenimiento?.completado
+              ? 'Listo para iniciar enfriamiento'
+              : 'En espera del Paso 3'
+          }
+          variant={
+            state.enfriamiento?.enfriamientoCompletado
+              ? 'success'
+              : state.enfriamiento?.enfriamientoIniciado
+              ? 'info'
+              : state.sostenimiento?.completado
+              ? 'default'
+              : 'locked'
+          }
+          headerRight={
+            state.enfriamiento?.enfriamientoCompletado ? (
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-gray-700 bg-white px-3 py-1.5 rounded-xl border border-gray-300 shadow-2xs hover:border-amber-400 transition-all">
+                <input
+                  type="checkbox"
+                  checked={manualPaso4}
+                  onChange={(e) => setManualPaso4(e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <span>Habilitar edición manual</span>
+              </label>
+            ) : undefined
+          }
+        >
+          <div className="space-y-4">
+            {!state.enfriamiento?.enfriamientoIniciado ? (
+              <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-500 flex items-center gap-2.5">
+                <span className="material-symbols-outlined text-gray-400 text-[20px]">
+                  lock_clock
+                </span>
+                <span>
+                  El cronómetro de enfriamiento a {targetCoolingTempStr} arrancará automáticamente en el momento exacto en que se confirme la retención del Paso 3.
+                </span>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-xl bg-white border border-[#e6decb]">
-                  <span className="text-[10px] uppercase font-bold text-gray-500 block">
-                    INICIO ENFRIAMIENTO
-                  </span>
-                  <span className="text-xl font-mono font-black text-gray-900 mt-1 block">
-                    {state.enfriamiento?.horaInicio}
-                  </span>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl bg-white border border-[#e6decb]">
+                    <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                      TEMPERATURA OBJETIVO DE ENFRIAMIENTO
+                    </span>
+                    <span className="text-2xl font-black font-mono text-blue-900 mt-1 block">
+                      {targetCoolingTemp.toFixed(1)} °C
+                    </span>
+                    <span className="text-[11px] text-gray-500">
+                      {isKumis
+                        ? 'Temperatura óptima para la siembra del cultivo de kumis (30–35 °C)'
+                        : 'Temperatura óptima para la siembra del cultivo (42–45 °C)'}
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-200">
+                    <span className="text-[10px] uppercase font-bold text-blue-800 block">
+                      CRONÓMETRO DE ENFRIAMIENTO
+                    </span>
+                    <span className="text-2xl font-black font-mono text-blue-950 mt-1 block">
+                      {state.enfriamiento?.enfriamientoCompletado
+                        ? state.enfriamiento?.tiempoEnfriamiento || 'Listo'
+                        : enfriamientoTimer.humanElapsed}
+                    </span>
+                    <span className="text-[11px] text-blue-800 font-medium">
+                      {state.enfriamiento?.enfriamientoCompletado
+                        ? 'Enfriamiento finalizado'
+                        : 'Circulando agua fría por la chaqueta...'}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-white border border-[#e6decb]">
-                  <span className="text-[10px] uppercase font-bold text-gray-500 block">
-                    LLEGADA A 45 °C
-                  </span>
-                  <span className="text-xl font-mono font-black text-blue-900 mt-1 block">
-                    {state.enfriamiento?.horaFinEnfriamiento}
-                  </span>
-                </div>
+                {!manualPaso4 ? (
+                  !state.enfriamiento?.enfriamientoCompletado ? (
+                    <div className="pt-2">
+                      <Button
+                        variant="primary"
+                        size="xl"
+                        icon="ac_unit"
+                        onClick={handleLlego45}
+                        disabled={!state.enfriamiento?.enfriamientoIniciado}
+                        className="bg-blue-600 text-white hover:bg-blue-700 transition-colors font-bold shadow-md shadow-blue-600/20"
+                      >
+                        {coolingStepTitle}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-4 rounded-xl bg-white border border-[#e6decb]">
+                        <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                          INICIO ENFRIAMIENTO
+                        </span>
+                        <span className="text-xl font-mono font-black text-gray-900 mt-1 block">
+                          {state.enfriamiento?.horaInicio}
+                        </span>
+                      </div>
 
-                <div className="p-4 rounded-xl bg-blue-50 border border-blue-300">
-                  <span className="text-[10px] uppercase font-bold text-blue-800 block">
-                    TIEMPO DE ENFRIAMIENTO (SOLO LECTURA)
-                  </span>
-                  <span className="text-xl font-mono font-black text-blue-950 mt-1 block">
-                    {state.enfriamiento?.tiempoEnfriamiento}
-                  </span>
-                </div>
-              </div>
-            )
-          ) : (
-            <div className="p-4 rounded-xl bg-amber-50/90 border-2 border-amber-300 flex flex-col gap-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
-                <PopoverTimePicker
-                  label="Hora de Llegada a 45 °C"
-                  icon="schedule"
-                  hint="Toca para desplegar el selector flotante (hh:mm:ss)"
-                  value={horaManualPaso4}
-                  onChange={setHoraManualPaso4}
-                />
+                      <div className="p-4 rounded-xl bg-white border border-[#e6decb]">
+                        <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                          LLEGADA A {targetCoolingTempStr}
+                        </span>
+                        <span className="text-xl font-mono font-black text-blue-900 mt-1 block">
+                          {state.enfriamiento?.horaFinEnfriamiento}
+                        </span>
+                      </div>
 
-                <InputField
-                  label="Tiempo de Enfriamiento (Solo Lectura)"
-                  icon="timer"
-                  type="text"
-                  disabled
-                  readOnly
-                  placeholder="Se calcula automáticamente"
-                  hint={`Calculado: ${state.enfriamiento?.horaInicio} → ${horaManualPaso4}`}
-                  value={duracionEnfriamientoRecalculada}
-                />
-              </div>
+                      <div className="p-4 rounded-xl bg-blue-50 border border-blue-300">
+                        <span className="text-[10px] uppercase font-bold text-blue-800 block">
+                          TIEMPO DE ENFRIAMIENTO (SOLO LECTURA)
+                        </span>
+                        <span className="text-xl font-mono font-black text-blue-950 mt-1 block">
+                          {state.enfriamiento?.tiempoEnfriamiento}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="p-4 rounded-xl bg-amber-50/90 border-2 border-amber-300 flex flex-col gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                      <PopoverTimePicker
+                        label={`Hora de Llegada a ${targetCoolingTempStr}`}
+                        icon="schedule"
+                        hint="Toca para desplegar el selector flotante (hh:mm:ss)"
+                        value={horaManualPaso4}
+                        onChange={setHoraManualPaso4}
+                      />
 
-              <div className="flex justify-end pt-2">
-                <Button
-                  variant="primary"
-                  size="md"
-                  icon="save"
-                  onClick={handleSaveManualPaso4}
-                >
-                  Guardar Hora de Enfriamiento
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
+                      <InputField
+                        label="Tiempo de Enfriamiento (Solo Lectura)"
+                        icon="timer"
+                        type="text"
+                        disabled
+                        readOnly
+                        placeholder="Se calcula automáticamente"
+                        hint={`Calculado: ${state.enfriamiento?.horaInicio} → ${horaManualPaso4}`}
+                        value={duracionEnfriamientoRecalculada}
+                      />
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        variant="primary"
+                        size="md"
+                        icon="save"
+                        onClick={handleSaveManualPaso4}
+                      >
+                        Guardar Hora de Enfriamiento
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </Card>
+      </div>
 
       {/* =========================================================================
           7. PASO 5: TRASLADO A CANTINAS
       ========================================================================= */}
       <Card
         title="¡Leche trasladada a cantinas!"
-        subtitle="Calcula el tiempo desde que la leche llegó a 45 °C hasta que se pasó a las cantinas limpias."
+        subtitle="Calcula el tiempo desde que la leche llegó a ${targetCoolingTempStr} hasta que se pasó a las cantinas limpias."
         icon="inventory_2"
         badge={
           state.trasiego?.completado
@@ -1472,7 +1696,7 @@ export const PasteurizacionStageCommon: React.FC<
                 Cantinas de acero inoxidable limpias y desinfectadas
               </span>
               <span className="text-xs text-gray-500">
-                La leche está a 45 °C, lista para recibir el cultivo e incubar.
+                La leche está a ${targetCoolingTempStr}, lista para recibir el cultivo e incubar.
               </span>
             </div>
 
@@ -1603,7 +1827,7 @@ export const PasteurizacionStageCommon: React.FC<
               {productName} · Cierre de Pasteurización
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">
-              Leche lista a 45 °C en cantinas · Pasa a la siembra del cultivo
+              Leche lista a ${targetCoolingTempStr} en cantinas · Pasa a la siembra del cultivo
               láctico.
             </p>
           </div>
@@ -1621,6 +1845,179 @@ export const PasteurizacionStageCommon: React.FC<
           </Button>
         </div>
       </div>
+
+      {/* =========================================================================
+          MODAL DE EXTRACCIÓN DE BASE PARA KUMIS (PUNTO DE QUIEBRE)
+      ========================================================================= */}
+      {showModalExtraccion && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#e6decb] flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#e6decb]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[24px]">call_split</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900">
+                    Extracción de Base para Kumis
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Desvío de leche pasteurizada dulce caliente (85–90 °C)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowModalExtraccion(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            {/* Pregunta Principal */}
+            <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200">
+              <label className="text-sm font-extrabold text-purple-950 block mb-1">
+                ¿Cuántos litros se van a desviar para Kumis?
+              </label>
+              <p className="text-xs text-purple-900/80">
+                Volumen total disponible en este punto:{' '}
+                <strong className="font-mono text-purple-950 font-black">
+                  {volumenTotalDisponible} L
+                </strong>
+                {prevExtraidosKumis > 0 && (
+                  <span className="text-purple-700 ml-1">
+                    (Yogur actual: {state.litrosLeche} L + {prevExtraidosKumis} L previamente extraídos)
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {/* Input de Litros a Extraer */}
+            <div>
+              <InputField
+                label="Litros a desviar para Kumis"
+                type="number"
+                inputMode="numeric"
+                min="1"
+                max={volumenTotalDisponible}
+                step="1"
+                unit="L"
+                icon="water_drop"
+                placeholder="Ej: 200"
+                showZero={false}
+                value={litrosKumisInput}
+                onChange={(e) => {
+                  const rawVal = e.target.value;
+                  setLitrosKumisInput(rawVal);
+                  const num = Number(rawVal);
+                  if (rawVal !== '' && num <= 0) {
+                    setErrorExtraccion('La cantidad debe ser mayor a 0 litros.');
+                  } else if (num > volumenTotalDisponible) {
+                    setErrorExtraccion(
+                      `Los litros extraídos no pueden superar el volumen total disponible (${volumenTotalDisponible} L).`
+                    );
+                  } else {
+                    setErrorExtraccion(null);
+                  }
+                }}
+              />
+              {errorExtraccion && (
+                <p className="text-xs font-bold text-red-600 mt-1.5 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px]">error</span>
+                  {errorExtraccion}
+                </p>
+              )}
+            </div>
+
+            {/* Tarjeta de Datos Heredados y Balance Resultante */}
+            {parsedLitrosKumis > 0 && parsedLitrosKumis <= volumenTotalDisponible && (
+              <div className="p-4 rounded-2xl bg-[#faf7f0] border border-[#e3d7be] flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-500">
+                    Resumen de Balance y Herencia de Trazabilidad
+                  </span>
+                  {parsedLitrosKumis === volumenTotalDisponible && (
+                    <Badge variant="warning" size="sm">
+                      ¡Desvío 100%! Auto-cierre de Lote Padre
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-2.5 rounded-xl bg-white border border-[#e6decb]">
+                    <span className="text-[10px] font-bold text-gray-500 block uppercase">
+                      Yogur Restante
+                    </span>
+                    <span className="text-base font-black font-mono text-blue-950">
+                      {volumenTotalDisponible - parsedLitrosKumis} L
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200">
+                    <span className="text-[10px] font-bold text-purple-800 block uppercase">
+                      Kumis Lote Hijo
+                    </span>
+                    <span className="text-base font-black font-mono text-purple-950">
+                      {parsedLitrosKumis} L
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white border border-[#e6decb]">
+                    <span className="text-[10px] font-bold text-gray-500 block uppercase">
+                      Lote Leche Heredado
+                    </span>
+                    <span className="font-mono font-bold text-gray-900">
+                      {state.loteLeche || 'Sin lote'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white border border-[#e6decb]">
+                    <span className="text-[10px] font-bold text-gray-500 block uppercase">
+                      Lote Azúcar Heredado
+                    </span>
+                    <span className="font-mono font-bold text-amber-900">
+                      {state.azucar?.loteAzucar || state.loteAzucarPastur || 'Heredado'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-gray-600 bg-white/70 p-2 rounded-lg border border-[#e6decb]/60 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-amber-600 text-[18px]">
+                    cookie
+                  </span>
+                  <span>
+                    Azúcar proporcional asignada a Kumis:{' '}
+                    <strong>{(parsedLitrosKumis * 0.04).toFixed(2)} kg</strong> (80 g / L)
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Botones de acción */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setShowModalExtraccion(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                icon="check_circle"
+                onClick={handleConfirmarExtraccion}
+                disabled={!esExtraccionValida}
+                className="bg-purple-700 text-white hover:bg-purple-800 font-bold shadow-md shadow-purple-700/20 cursor-pointer"
+              >
+                Confirmar Extracción y Desviar Litros
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

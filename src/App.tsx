@@ -266,8 +266,10 @@ export default function App() {
           lines={lines}
           currentUser={activeUser}
           activeBatchId={activeHeaderBatch.id}
+          activeBatchStatus={activeHeaderBatch.status}
           onSelectLine={handleSelectLine}
           onContinueCurrentBatch={() => setCurrentView('batch_process')}
+          onViewBatchSummary={openActiveReviewModal}
         />
       )}
 

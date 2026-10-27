@@ -29,6 +29,8 @@ interface HilarStagePeraProps {
   onChange: (updater: (prev: HilarState) => HilarState) => void;
   timestampDesuerado?: number | null;
   horaDesuerado?: string | null;
+  horaFinEscurrido?: string | null;
+  timestampFinEscurrido?: number | null;
   phEscurrido?: number;
   totalLecheMezcla?: number;
   processTimer: ProcessTimerState;

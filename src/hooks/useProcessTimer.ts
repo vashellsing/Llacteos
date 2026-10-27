@@ -140,23 +140,26 @@ export function useIndependentBatchTimer<
 
   useEffect(() => {
     if (!isRunning || isCompleted || !startTimestamp) return;
-    if (timerResult.elapsedSeconds === batch.processTimer.elapsedSeconds) return;
 
-    setBatch((prev) => ({
-      ...prev,
-      processTimer: {
-        ...prev.processTimer,
-        elapsedSeconds: timerResult.elapsedSeconds,
-        formattedTime: timerResult.formattedTime,
-      },
-    }));
+    setBatch((prev) => {
+      if (prev.processTimer.elapsedSeconds === timerResult.elapsedSeconds) {
+        return prev;
+      }
+      return {
+        ...prev,
+        processTimer: {
+          ...prev.processTimer,
+          elapsedSeconds: timerResult.elapsedSeconds,
+          formattedTime: timerResult.formattedTime,
+        },
+      };
+    });
   }, [
     isRunning,
     isCompleted,
     startTimestamp,
     timerResult.elapsedSeconds,
     timerResult.formattedTime,
-    batch.processTimer.elapsedSeconds,
     setBatch,
   ]);
 

@@ -11,6 +11,7 @@ export interface PasteurizacionStageYogurProps {
   processTimer: ProcessTimerState;
   onStartProcessTimer: () => void;
   onSplitParentBatch?: (input: SplitMilkAllocationInput) => void;
+  onExtractKumisChildBatch?: (litrosKumis: number) => void;
   onNextStage: () => void;
   onOpenReviewModal?: () => void;
   showToast: (msg: string, type?: 'success' | 'info' | 'warning') => void;

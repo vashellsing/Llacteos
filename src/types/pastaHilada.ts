@@ -361,7 +361,7 @@ export interface MoldesDesglose {
   moldesQuesadillaArequipe60g?: number; // Quesadilla con Arequipe (60 g = 0.06 kg)
   moldesQuesadillaBocadillo60g?: number; // Quesadilla con Bocadillo (60 g = 0.06 kg)
   pesadoTotalHiladoKg?: number; // Espacio de pesado total del hilado (en báscula)
-  pesoTotalCalculadoKg: number;
+  pesoTotalCalculadoKg?: number;
   esPesoManual: boolean;
   confirmado?: boolean;
 }

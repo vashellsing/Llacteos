@@ -31,15 +31,12 @@ import { MoldeoStage7Cueros } from '../../features/pasta-hilada/siete-cueros/Mol
 // FERMENTADOS · YOGUR
 import { PasteurizacionStageYogur } from '../../features/fermentados/yogur/PasteurizacionStageYogur';
 import { InoculacionStageYogur } from '../../features/fermentados/yogur/InoculacionStageYogur';
-import { MaduracionFrioStageYogur } from '../../features/fermentados/yogur/MaduracionFrioStageYogur';
 import { BatidoYAdicionesStageYogur } from '../../features/fermentados/yogur/BatidoYAdicionesStageYogur';
 import { EnvasadoYogurStage } from '../../features/fermentados/yogur/EnvasadoYogurStage';
 
 // FERMENTADOS · KUMIS
 import { PasteurizacionStageKumis } from '../../features/fermentados/kumis/PasteurizacionStageKumis';
 import { InoculacionStageKumis } from '../../features/fermentados/kumis/InoculacionStageKumis';
-import { MaduracionFrioStageKumis } from '../../features/fermentados/kumis/MaduracionFrioStageKumis';
-import { BatidoYAdicionesStageKumis } from '../../features/fermentados/kumis/BatidoYAdicionesStageKumis';
 import { EnvasadoKumisStage } from '../../features/fermentados/kumis/EnvasadoKumisStage';
 
 // FERMENTADOS · YOGUR GRIEGO
@@ -78,6 +75,8 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
     isFermentacionLine,
     parentBatch,
     splitParentBatch,
+    handleExtractKumisChildBatch,
+    handleExtractYogurGriegoChildBatch,
     subBatchTabs,
     batch,
     setBatch,
@@ -104,6 +103,8 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
     setCurrentStage,
   } = batchManager;
 
+  const isReadOnly = activeHeaderBatch.status === 'COMPLETADO';
+
   const handleInoculacionToBatidoYSabores = React.useCallback(() => {
     if (isKumis) {
       setBatchKumis((prev) => ({
@@ -111,20 +112,24 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
         stageStatuses: {
           ...prev.stageStatuses,
           'calentar-y-cuajar': 'completada',
-          desuerar: 'completada',
-          hilar: 'en_proceso',
+          moldeo: 'en_proceso',
         },
       }));
+      setCurrentStage('moldeo');
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      return;
     } else if (isYogur) {
       setBatchYogur((prev) => ({
         ...prev,
         stageStatuses: {
           ...prev.stageStatuses,
           'calentar-y-cuajar': 'completada',
-          desuerar: 'completada',
           hilar: 'en_proceso',
         },
       }));
+      setCurrentStage('hilar');
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      return;
     }
     setCurrentStage('hilar');
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -156,15 +161,44 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
         </div>
       )}
 
-      {/* BARRA DE CONMUTACIÓN RÁPIDA DE SUB-LOTES Y DIVISIÓN DE LOTE PADRE */}
+      {/* Banner de Modo Solo Lectura para Lotes Cerrados y Auditados */}
+      {isReadOnly && (
+        <div className="bg-slate-100 border-b border-slate-300 text-slate-800 px-4 lg:px-6 py-2.5 text-xs font-black flex flex-wrap items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-slate-600">
+              lock
+            </span>
+            <span>
+              🔒 Lote Cerrado y Auditado - Modo de Solo Lectura ({activeHeaderBatch.productName} · {activeHeaderBatch.id})
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={batchManager.openActiveReviewModal}
+            className="px-3 py-1 bg-white text-slate-900 border border-slate-300 rounded-lg hover:bg-slate-50 transition-all font-bold flex items-center gap-1 cursor-pointer text-xs shadow-2xs"
+          >
+            <span className="material-symbols-outlined text-[15px]">
+              visibility
+            </span>
+            <span>Ver Resumen del Lote</span>
+          </button>
+        </div>
+      )}
+
+      {/* BARRA DE CONMUTACIÓN RÁPIDA DE SUB-LOTES */}
       <SubBatchSwitcherBar
         tabs={subBatchTabs}
         activeProductId={activeProductId}
         onSelectSubBatch={(productId) => selectProductBatch(productId)}
         isFermentacionLine={isFermentacionLine}
         parentBatch={parentBatch}
-        onSplitParentBatch={splitParentBatch}
       />
+
+      {/* CONTENEDOR DE ETAPAS (Protegido por Candado Read-Only cuando el lote está COMPLETADO) */}
+      <fieldset
+        disabled={isReadOnly}
+        className={`contents ${isReadOnly ? 'pointer-events-none select-none opacity-95' : ''}`}
+      >
 
       {/* RAMA 1: YOGUR GRIEGO */}
       {isYogurGriego ? (
@@ -308,53 +342,6 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
             />
           )}
 
-          {currentStage === 'desuerar' && (
-            <div className="flex flex-col w-full p-4 lg:p-6 gap-5 bg-[#fcfaf7] min-h-[calc(100vh-4rem)]">
-              <Card
-                title="Fase de Cuarto Frío Integrada"
-                subtitle="El Kumis fue ingresado a cuarto frío al finalizar la incubación. No requiere registros de cronómetros intermedios."
-                icon="kitchen"
-                tone="completed"
-              >
-                <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-sm mb-4">
-                  ✓ El producto se encuentra en reposo en cuarto frío desde las{' '}
-                  <strong>
-                    {batchKumis.inoculacion.incubacion.horaEntradaCuartoFrio ||
-                      batchKumis.inoculacion.incubacion.horaFin ||
-                      'la incubación'}
-                  </strong>
-                  . La siguiente etapa operativa es <strong>3. Batido y Sabores</strong>.
-                </div>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  iconRight="arrow_forward"
-                  onClick={() => setCurrentStage('hilar')}
-                >
-                  Ir a 3. Batido y Sabores
-                </Button>
-              </Card>
-            </div>
-          )}
-
-          {currentStage === 'hilar' && (
-            <BatidoYAdicionesStageKumis
-              state={batchKumis.batidoYAdiciones}
-              onChange={(updater) =>
-                setBatchKumis((prev) => ({
-                  ...prev,
-                  batidoYAdiciones: updater(prev.batidoYAdiciones),
-                }))
-              }
-              llevaAzucar={batchKumis.pasteurizacion.llevaAzucar}
-              litrosLecheBase={batchKumis.pasteurizacion.litrosLeche}
-              processTimer={batchKumis.processTimer}
-              onNextStage={handleNextStage}
-              onOpenReviewModal={() => setKumisReviewModalOpen(true)}
-              showToast={showToast}
-            />
-          )}
-
           {currentStage === 'moldeo' && (
             <EnvasadoKumisStage
               batch={batchKumis}
@@ -386,6 +373,7 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
               processTimer={batchYogur.processTimer}
               onStartProcessTimer={handleStartProcessTimerYogur}
               onSplitParentBatch={splitParentBatch}
+              onExtractKumisChildBatch={handleExtractKumisChildBatch}
               onNextStage={handleNextStage}
               onOpenReviewModal={() => setYogurReviewModalOpen(true)}
               showToast={showToast}
@@ -412,42 +400,26 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
                 batchYogur.pasteurizacion.loteCultivoLacticoPastur ||
                 (batchYogur.pasteurizacion as any).loteCultivoLactico
               }
+              llevaAzucar={batchYogur.pasteurizacion.llevaAzucar}
               processTimer={batchYogur.processTimer}
               onNextStage={handleInoculacionToBatidoYSabores}
               onGoToBatidoYSabores={handleInoculacionToBatidoYSabores}
               onFinalizeProcess={handleFinalizeYogurBatch}
               onOpenReviewModal={() => setYogurReviewModalOpen(true)}
               showToast={showToast}
+              onExtractKumis={handleExtractKumisChildBatch}
+              onExtractGriego={handleExtractYogurGriegoChildBatch}
+              extraccionKumisRealizada={Boolean(
+                batchYogur.pasteurizacion.extraccionKumis?.realizado
+              )}
+              extraccionGriegoRealizada={Boolean(
+                batchYogur.pasteurizacion.extraccionGriego?.realizado
+              )}
+              litrosExtraidosPrevios={
+                (batchYogur.pasteurizacion.extraccionGriego?.litrosExtraidos || 0) +
+                (batchYogur.pasteurizacion.extraccionKumis?.litrosExtraidos || 0)
+              }
             />
-          )}
-
-          {currentStage === 'desuerar' && (
-            <div className="flex flex-col w-full p-4 lg:p-6 gap-5 bg-[#fcfaf7] min-h-[calc(100vh-4rem)]">
-              <Card
-                title="Fase de Cuarto Frío Integrada"
-                subtitle="El Yogur fue ingresado a cuarto frío al finalizar la incubación. No requiere registros de cronómetros intermedios."
-                icon="kitchen"
-                tone="completed"
-              >
-                <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-sm mb-4">
-                  ✓ El producto se encuentra en reposo en cuarto frío desde las{' '}
-                  <strong>
-                    {batchYogur.inoculacion.incubacion.horaEntradaCuartoFrio ||
-                      batchYogur.inoculacion.incubacion.horaFin ||
-                      'la incubación'}
-                  </strong>
-                  . La siguiente etapa operativa es <strong>3. Batido y Sabores</strong>.
-                </div>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  iconRight="arrow_forward"
-                  onClick={() => setCurrentStage('hilar')}
-                >
-                  Ir a 3. Batido y Sabores
-                </Button>
-              </Card>
-            </div>
           )}
 
           {currentStage === 'hilar' && (
@@ -778,7 +750,7 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
                 batch.desuerar.escurrido?.timestampFin ||
                 batch.desuerar.desuerado.timestampDesuerado
               }
-              loteSal={batch.loteSal || batch.acidificar.insumos.loteSal}
+              loteSal={batch.loteSal || (batch.acidificar.insumos as any)?.loteSal}
               phEscurrido={batch.desuerar.escurrido.phEscurrido}
               totalLecheMezcla={
                 batch.acidificar.insumos.lecheFresca +
@@ -922,7 +894,7 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
                 batch.desuerar.escurrido?.timestampFin ||
                 batch.desuerar.desuerado.timestampDesuerado
               }
-              loteSal={batch.loteSal || batch.acidificar.insumos.loteSal}
+              loteSal={batch.loteSal || (batch.acidificar.insumos as any)?.loteSal}
               phEscurrido={batch.desuerar.escurrido.phEscurrido}
               totalLecheMezcla={
                 batch.acidificar.insumos.litrosConfirmados ||
@@ -1101,6 +1073,7 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
           )}
         </>
       )}
+      </fieldset>
     </div>
   );
 };
