@@ -266,12 +266,27 @@ export interface EnvasadoYAlmacenamientoYogurState {
   temperaturaEnvasado: number; // 6.5 °C
 
   // Presentaciones de ENVASADO de yogur (en ml/L, no en gramos)
-  // Botella 200 ml, Botella 1 L, Botella 2 L, Bolsa 4 L.
+  // Botella 120 ml (Stevia), Botella 200 ml, Botella 1 L, Botella 2 L, Bolsa 4 L.
   formatos: {
+    botella120ml?: number; // Botella 120 ml (Stevia)
     botella200ml: number; // Botella 200 ml
     botella1L: number;    // Botella 1 L
     botella2L: number;    // Botella 2 L
     bolsa4L: number;      // Bolsa 4 L
+
+    // Categoría 1: Envases "Sin Azúcar" (Natural)
+    sinAzucar_botella200ml?: number;
+    sinAzucar_botella1L?: number;
+    sinAzucar_botella2L?: number;
+    sinAzucar_bolsa4L?: number;
+
+    // Categoría 2: Envases "Con Stevia"
+    stevia_botella120ml?: number;
+    stevia_botella200ml?: number;
+    stevia_botella1L?: number;
+    stevia_botella2L?: number;
+    stevia_bolsa4L?: number;
+
     // Backwards compat
     botella1000g?: number;
     botella500g?: number;
@@ -515,9 +530,9 @@ export const INITIAL_YOGUR_BATCH: YogurBatchData = {
         notaInformativa: 'Exento de azúcar, saborizantes y colorantes. Directo a envasado.',
       },
       variedadEstevia: {
-        litrosBase: 25,
-        gramosEstevia: 80,
-        loteEstevia: 'EST-2026-BIO',
+        litrosBase: 0,
+        gramosEstevia: 0,
+        loteEstevia: '',
       },
       variedadAzucar: {
         litrosBase: 50,
@@ -560,10 +575,20 @@ export const INITIAL_YOGUR_BATCH: YogurBatchData = {
     fechaVencimiento: '14/11/2026',
     temperaturaEnvasado: 6.5,
     formatos: {
+      botella120ml: 0,
       botella200ml: 0,
       botella1L: 0,
       botella2L: 0,
       bolsa4L: 0,
+      sinAzucar_botella200ml: 0,
+      sinAzucar_botella1L: 0,
+      sinAzucar_botella2L: 0,
+      sinAzucar_bolsa4L: 0,
+      stevia_botella120ml: 0,
+      stevia_botella200ml: 0,
+      stevia_botella1L: 0,
+      stevia_botella2L: 0,
+      stevia_bolsa4L: 0,
     },
     formatosKumis: {
       tarro1L: 0,

@@ -358,6 +358,7 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
           {currentStage === 'moldeo' && (
             <EnvasadoKumisStage
               batch={batchKumis}
+              llevaAzucar={batchKumis.pasteurizacion.llevaAzucar}
               onChange={(updater) =>
                 setBatchKumis((prev) => ({
                   ...prev,
@@ -470,6 +471,7 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
           {currentStage === 'moldeo' && (
             <EnvasadoYogurStage
               batch={batchYogur}
+              llevaAzucar={batchYogur.pasteurizacion.llevaAzucar}
               onChange={(updater) =>
                 setBatchYogur((prev) => ({
                   ...prev,

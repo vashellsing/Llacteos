@@ -70,12 +70,32 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
 
   const { pasteurizacion, inoculacion, maduracionFrio, batidoYAdiciones, envasado } = batch;
 
-  // 1. Cálculos de envasado (REGLA 8: Solo Kumis 1 L y Kumis 2 L)
-  const u1L = (envasado.formatos.botella1L ?? envasado.formatos.botella1000g) || 0;
-  const u2L = envasado.formatos.botella2L || 0;
+  // 1. Cálculos de envasado (agregando presentaciones tradicionales y categorías Sin Azúcar / Stevia)
+  const uSinAzucar_200ml = envasado.formatos.sinAzucar_botella200ml || 0;
+  const uSinAzucar_1L = envasado.formatos.sinAzucar_botella1L || 0;
+  const uSinAzucar_2L = envasado.formatos.sinAzucar_botella2L || 0;
+  const uSinAzucar_4L = envasado.formatos.sinAzucar_bolsa4L || 0;
 
-  const totalUnidades = u1L + u2L;
-  const totalLitrosEnvasados = Number((u1L * 1.0 + u2L * 2.0).toFixed(2));
+  const uStevia_120ml = envasado.formatos.stevia_botella120ml || 0;
+  const uStevia_200ml = envasado.formatos.stevia_botella200ml || 0;
+  const uStevia_1L = envasado.formatos.stevia_botella1L || 0;
+  const uStevia_2L = envasado.formatos.stevia_botella2L || 0;
+  const uStevia_4L = envasado.formatos.stevia_bolsa4L || 0;
+
+  const uTrad_120ml = envasado.formatos.botella120ml || 0;
+  const uTrad_1L = (envasado.formatos.botella1L ?? envasado.formatos.botella1000g) || 0;
+  const uTrad_2L = envasado.formatos.botella2L || 0;
+
+  const u120ml = uStevia_120ml + uTrad_120ml;
+  const u200ml = uSinAzucar_200ml + uStevia_200ml;
+  const u1L = uSinAzucar_1L + uStevia_1L + uTrad_1L;
+  const u2L = uSinAzucar_2L + uStevia_2L + uTrad_2L;
+  const u4L = uSinAzucar_4L + uStevia_4L;
+
+  const totalUnidades = u120ml + u200ml + u1L + u2L + u4L;
+  const totalLitrosEnvasados = Number(
+    (u120ml * 0.12 + u200ml * 0.2 + u1L * 1.0 + u2L * 2.0 + u4L * 4.0).toFixed(2)
+  );
   const totalKilosEnvasados = Math.round((totalLitrosEnvasados * 1.03) * 100) / 100;
 
   // 2. Formulación Kumis (REGLA 6: Siempre con azúcar)
@@ -434,7 +454,14 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className={`grid grid-cols-1 ${u120ml > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}>
+                  {u120ml > 0 && (
+                    <div className="p-4 bg-[#fcfaf7] rounded-xl border border-emerald-200 flex flex-col items-center text-center">
+                      <span className="text-xs font-bold text-gray-600 uppercase">Botella 120 ml (Stevia)</span>
+                      <strong className="text-2xl font-black font-mono text-emerald-950 my-1">{u120ml} botellas</strong>
+                      <span className="text-xs font-bold text-emerald-800">{(u120ml * 0.12).toFixed(2)} Litros</span>
+                    </div>
+                  )}
                   <div className="p-4 bg-[#fcfaf7] rounded-xl border border-indigo-200 flex flex-col items-center text-center">
                     <span className="text-xs font-bold text-gray-600 uppercase">Kumis 1 L</span>
                     <strong className="text-2xl font-black font-mono text-indigo-950 my-1">{u1L} botellas</strong>

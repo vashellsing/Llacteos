@@ -110,28 +110,30 @@ export const BatidoYSaboresStageCommon: React.FC<BatidoYSaboresStageCommonProps>
   // =========================================================================
   const variedadEsteviaState = (state.adiciones as any)?.variedadEstevia || {};
 
-  const [cantidadStevia, setCantidadStevia] = useState<number | ''>(
-    (state.adiciones as any)?.gramosStevia !== undefined &&
-      (state.adiciones as any)?.gramosStevia !== null &&
-      (state.adiciones as any)?.gramosStevia !== 0
-      ? (state.adiciones as any)?.gramosStevia
-      : variedadEsteviaState.gramosEstevia !== undefined &&
-        variedadEsteviaState.gramosEstevia !== null &&
-        variedadEsteviaState.gramosEstevia !== 0
-      ? variedadEsteviaState.gramosEstevia
-      : ''
+  const isSteviaConfirmada = Boolean(
+    (state.adiciones as any)?.steviaConfirmada ||
+      Boolean((state.adiciones as any)?.horaAdicionStevia)
   );
+
+  // Insumo limpio: inicia vacío sin ceros si no ha sido confirmada la adición
+  const [cantidadStevia, setCantidadStevia] = useState<number | ''>(() => {
+    if (
+      (state.adiciones as any)?.steviaConfirmada ||
+      (state.adiciones as any)?.horaAdicionStevia
+    ) {
+      return (
+        (state.adiciones as any)?.gramosStevia ||
+        variedadEsteviaState.gramosEstevia ||
+        ''
+      );
+    }
+    return '';
+  });
 
   const [loteStevia, setLoteStevia] = useState<string>(
     (state.adiciones as any)?.loteStevia ||
       variedadEsteviaState.loteEstevia ||
       'EST-2026-BIO'
-  );
-
-  const isSteviaConfirmada = Boolean(
-    (state.adiciones as any)?.steviaConfirmada ||
-      variedadEsteviaState.registrado ||
-      (state.adiciones as any)?.horaAdicionStevia
   );
 
   const [manualPaso1Stevia, setManualPaso1Stevia] = useState<boolean>(
@@ -277,6 +279,68 @@ export const BatidoYSaboresStageCommon: React.FC<BatidoYSaboresStageCommonProps>
   };
 
   // =========================================================================
+  // MANEJADORES PASO 01 (ALTERNATIVO): ADICIÓN DE STEVIA
+  // =========================================================================
+  const handleConfirmStevia = () => {
+    const timeStr = getCurrentTimeString();
+    const numStevia = cantidadStevia === '' ? 0 : Number(cantidadStevia);
+
+    onChange((prev: any) => ({
+      ...prev,
+      adiciones: {
+        ...prev.adiciones,
+        tipoYogur: 'con_estevia',
+        steviaConfirmada: true,
+        registrado: true,
+        horaRegistro: timeStr,
+        horaAdicionStevia: timeStr,
+        horaPreparacionReceta: timeStr,
+        gramosStevia: numStevia,
+        loteStevia: loteStevia,
+        variedadEstevia: {
+          ...(prev.adiciones?.variedadEstevia || {}),
+          litrosBase: litrosLecheBase,
+          gramosEstevia: numStevia,
+          loteEstevia: loteStevia,
+          registrado: true,
+          horaAdicion: timeStr,
+        },
+      },
+    }));
+
+    showToast(
+      `✓ ¡Ya agregué la stevia! Registrada a las ${timeStr} (${numStevia} g, Lote: ${loteStevia}). Paso de batido habilitado.`,
+      'success'
+    );
+  };
+
+  const handleSaveManualStevia = () => {
+    onChange((prev: any) => ({
+      ...prev,
+      adiciones: {
+        ...prev.adiciones,
+        steviaConfirmada: true,
+        registrado: true,
+        horaRegistro: horaManualStevia,
+        horaAdicionStevia: horaManualStevia,
+        horaPreparacionReceta: horaManualStevia,
+        esManualStevia: true,
+        habilitarModificacionManual: true,
+        variedadEstevia: {
+          ...(prev.adiciones?.variedadEstevia || {}),
+          loteEstevia: loteStevia,
+          horaAdicion: horaManualStevia,
+        },
+      },
+    }));
+
+    showToast(
+      `✓ Hora de adición de stevia actualizada a ${horaManualStevia}.`,
+      'success'
+    );
+  };
+
+  // =========================================================================
   // MANEJADORES PASO 02: BATIDO INDUSTRIAL (ESTILO HILADO)
   // =========================================================================
   const handleStartBatido = () => {
@@ -364,7 +428,11 @@ export const BatidoYSaboresStageCommon: React.FC<BatidoYSaboresStageCommonProps>
         totalStages={4}
         lineName={isYogur ? 'Línea de Fermentados · Yogur' : 'Línea de Fermentados · Kumis'}
         title="3. Batido y Sabores"
-        subtitle="Formulación de la receta (color y sabor) y batido suave controlado para lograr la textura homogénea y cremosa."
+        subtitle={
+          llevaAzucar
+            ? 'Formulación de la receta (color y sabor) y batido suave controlado para lograr la textura homogénea y cremosa.'
+            : 'Adición de stevia edulcorante y batido suave controlado para lograr la textura homogénea y cremosa.'
+        }
         standardBadge="NTC-805"
         metrics={[
           {
@@ -374,10 +442,16 @@ export const BatidoYSaboresStageCommon: React.FC<BatidoYSaboresStageCommonProps>
             tone: 'emerald',
           },
           {
-            icon: 'menu_book',
-            label: 'Receta',
-            value: isRecetaConfirmada ? 'Receta Lista ✓' : 'Por Definir',
-            tone: isRecetaConfirmada ? 'emerald' : 'amber',
+            icon: llevaAzucar ? 'menu_book' : 'eco',
+            label: llevaAzucar ? 'Receta' : 'Stevia',
+            value: isPaso1Listo
+              ? llevaAzucar
+                ? 'Receta Lista ✓'
+                : 'Stevia Lista ✓'
+              : llevaAzucar
+              ? 'Por Definir'
+              : 'Por Agregar',
+            tone: isPaso1Listo ? 'emerald' : 'amber',
           },
           {
             icon: 'cyclone',
@@ -393,166 +467,290 @@ export const BatidoYSaboresStageCommon: React.FC<BatidoYSaboresStageCommonProps>
       />
 
       {/* ========================================================================= */}
-      {/* PASO 01: PREPARACIÓN DE LA RECETA (COLOR Y SABOR) - UBICADO DE PRIMERO   */}
+      {/* PASO 01 CONDICIONAL: CON AZÚCAR (RECETA) vs SIN AZÚCAR (STEVIA)           */}
       {/* ========================================================================= */}
-      <Card
-        stepBadge="Paso 01"
-        title="Preparación de la Receta (Color y Sabor)"
-        subtitle="Define las cantidades de saborizante y colorante con sus respectivos lotes para preparar la mezcla antes de encender la batidora."
-        icon="menu_book"
-        tone={isRecetaConfirmada ? 'completed' : 'active'}
-        statusBadge={
-          isRecetaConfirmada
-            ? {
-                label: `Receta Lista (${horaRecetaDisplay || 'Confirmada'}) ✓`,
-                variant: 'success',
-              }
-            : { label: 'Definir Mezcla', variant: 'warning' }
-        }
-        headerAction={
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-[#5d564a] bg-[#f4efe6] px-3 py-1.5 rounded-lg border border-[#e6decb] hover:bg-[#ede5d6] transition-colors">
-              <input
-                type="checkbox"
-                checked={manualPaso1}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setManualPaso1(checked);
-                  onChange((p: any) => ({
-                    ...p,
-                    adiciones: { ...p.adiciones, esManualReceta: checked },
-                  }));
-                }}
-                className="rounded border-[#cfc4b0] text-[#1e1b18] focus:ring-amber-500 w-4 h-4 cursor-pointer"
-              />
-              <span>Habilitar edición manual</span>
-            </label>
-
-            {/* Botón de confirmación tipo "¡La receta está lista!" */}
-            <Button
-              variant={isRecetaConfirmada ? 'secondary' : 'primary'}
-              size="md"
-              icon="check_circle"
-              onClick={handleConfirmReceta}
-              className={
-                isRecetaConfirmada
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold'
-                  : 'font-bold shadow-sm'
-              }
-            >
-              {isRecetaConfirmada
-                ? `✓ ¡La receta está lista! (${horaRecetaDisplay || 'OK'})`
-                : '¡La receta está lista!'}
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* Sabor del Producto */}
-            <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-[#5d564a] block mb-1">
-                Sabor del Lote
-              </label>
-              <select
-                value={saborSeleccionado}
-                onChange={(e) => setSaborSeleccionado(e.target.value)}
-                className="w-full bg-white px-3 py-2.5 rounded-xl border border-[#d6ccb8] font-bold text-sm text-[#1e1b18] outline-none shadow-2xs"
-              >
-                {isYogur ? (
-                  <>
-                    <option value="Mora">Mora</option>
-                    <option value="Fresa">Fresa</option>
-                    <option value="Melocotón">Melocotón / Durazno</option>
-                    <option value="Frutos Rojos">Frutos Rojos</option>
-                    <option value="Vainilla">Vainilla</option>
-                    <option value="Arequipe">Arequipe</option>
-                    <option value="Natural">Natural (Sin Saborizante)</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="Tradicional">Kumis Tradicional</option>
-                    <option value="Vainilla">Kumis Vainilla</option>
-                    <option value="Canela">Kumis con Canela</option>
-                  </>
-                )}
-              </select>
-            </div>
-
-            {/* Insumo 1: Cantidad de Saborizante (ml) */}
-            <InputField
-              label="Cantidad de Saborizante (ml)"
-              type="number"
-              unit="ml"
-              placeholder="Ej: 800"
-              value={cantidadSaborizante === '' ? '' : cantidadSaborizante}
-              onChange={(e) => {
-                const val = e.target.value === '' ? '' : Number(e.target.value);
-                setCantidadSaborizante(val);
-              }}
-              hint="Dosificación exacta en ml"
-            />
-
-            {/* Insumo 2: Lote de Saborizante */}
-            <InputField
-              label="Lote de Saborizante"
-              type="text"
-              placeholder={isYogur ? 'Ej: SAB-2026-10A' : 'Ej: SAB-KUM-2026'}
-              value={loteSaborizante}
-              onChange={(e) => setLoteSaborizante(e.target.value)}
-              hint="Código del frasco de sabor"
-            />
-
-            {/* Insumo 3: Cantidad de Colorante (ml) */}
-            <InputField
-              label="Cantidad de Colorante (ml)"
-              type="number"
-              unit="ml"
-              placeholder="Ej: 50"
-              value={cantidadColorante === '' ? '' : cantidadColorante}
-              onChange={(e) => {
-                const val = e.target.value === '' ? '' : Number(e.target.value);
-                setCantidadColorante(val);
-              }}
-              hint="Dosificación exacta en ml"
-            />
-
-            {/* Insumo 4: Lote de Colorante */}
-            <InputField
-              label="Lote de Colorante"
-              type="text"
-              placeholder={isYogur ? 'Ej: COL-2026-10A' : 'Ej: COL-KUM-2026'}
-              value={loteColorante}
-              onChange={(e) => setLoteColorante(e.target.value)}
-              hint="Código del frasco de colorante"
-            />
-          </div>
-
-          {/* Edición manual de hora de preparación de la receta con PopoverTimePicker */}
-          {manualPaso1 && (
-            <div className="p-4 rounded-xl bg-amber-50/90 border-2 border-amber-300 flex flex-col sm:flex-row items-end gap-3 justify-between">
-              <div className="w-full sm:max-w-xs">
-                <PopoverTimePicker
-                  label="Hora en que se confirmó la receta"
-                  icon="schedule"
-                  hint="Toca para desplegar selector flotante (hh:mm:ss a)"
-                  value={horaManualReceta}
-                  onChange={setHoraManualReceta}
+      {llevaAzucar ? (
+        /* PASO 01 (CON AZÚCAR): PREPARACIÓN DE LA RECETA (COLOR Y SABOR) */
+        <Card
+          stepBadge="Paso 01"
+          title="Preparación de la Receta (Color y Sabor)"
+          subtitle="Define las cantidades de saborizante y colorante con sus respectivos lotes para preparar la mezcla antes de encender la batidora."
+          icon="menu_book"
+          tone={isRecetaConfirmada ? 'completed' : 'active'}
+          statusBadge={
+            isRecetaConfirmada
+              ? {
+                  label: `Receta Lista (${horaRecetaDisplay || 'Confirmada'}) ✓`,
+                  variant: 'success',
+                }
+              : { label: 'Definir Mezcla', variant: 'warning' }
+          }
+          headerAction={
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-[#5d564a] bg-[#f4efe6] px-3 py-1.5 rounded-lg border border-[#e6decb] hover:bg-[#ede5d6] transition-colors">
+                <input
+                  type="checkbox"
+                  checked={manualPaso1}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setManualPaso1(checked);
+                    onChange((p: any) => ({
+                      ...p,
+                      adiciones: { ...p.adiciones, esManualReceta: checked },
+                    }));
+                  }}
+                  className="rounded border-[#cfc4b0] text-[#1e1b18] focus:ring-amber-500 w-4 h-4 cursor-pointer"
                 />
-              </div>
+                <span>Habilitar edición manual</span>
+              </label>
+
+              {/* Botón de confirmación tipo "¡La receta está lista!" */}
               <Button
-                variant="secondary"
+                variant={isRecetaConfirmada ? 'secondary' : 'primary'}
                 size="md"
-                icon="save"
-                onClick={handleSaveManualReceta}
-                className="w-full sm:w-auto font-bold"
+                icon="check_circle"
+                onClick={handleConfirmReceta}
+                className={
+                  isRecetaConfirmada
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold'
+                    : 'font-bold shadow-sm'
+                }
               >
-                Guardar Hora de Receta
+                {isRecetaConfirmada
+                  ? `✓ ¡La receta está lista! (${horaRecetaDisplay || 'OK'})`
+                  : '¡La receta está lista!'}
               </Button>
             </div>
-          )}
-        </div>
-      </Card>
+          }
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              {/* Sabor del Producto */}
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-[#5d564a] block mb-1">
+                  Sabor del Lote
+                </label>
+                <select
+                  value={saborSeleccionado}
+                  onChange={(e) => setSaborSeleccionado(e.target.value)}
+                  className="w-full bg-white px-3 py-2.5 rounded-xl border border-[#d6ccb8] font-bold text-sm text-[#1e1b18] outline-none shadow-2xs"
+                >
+                  {isYogur ? (
+                    <>
+                      <option value="Mora">Mora</option>
+                      <option value="Fresa">Fresa</option>
+                      <option value="Melocotón">Melocotón / Durazno</option>
+                      <option value="Frutos Rojos">Frutos Rojos</option>
+                      <option value="Vainilla">Vainilla</option>
+                      <option value="Arequipe">Arequipe</option>
+                      <option value="Natural">Natural (Sin Saborizante)</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="Tradicional">Kumis Tradicional</option>
+                      <option value="Vainilla">Kumis Vainilla</option>
+                      <option value="Canela">Kumis con Canela</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              {/* Insumo 1: Cantidad de Saborizante (ml) */}
+              <InputField
+                label="Cantidad de Saborizante (ml)"
+                type="number"
+                unit="ml"
+                placeholder="Ej: 800"
+                value={cantidadSaborizante === '' ? '' : cantidadSaborizante}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? '' : Number(e.target.value);
+                  setCantidadSaborizante(val);
+                }}
+                hint="Dosificación exacta en ml"
+              />
+
+              {/* Insumo 2: Lote de Saborizante */}
+              <InputField
+                label="Lote de Saborizante"
+                type="text"
+                placeholder={isYogur ? 'Ej: SAB-2026-10A' : 'Ej: SAB-KUM-2026'}
+                value={loteSaborizante}
+                onChange={(e) => setLoteSaborizante(e.target.value)}
+                hint="Código del frasco de sabor"
+              />
+
+              {/* Insumo 3: Cantidad de Colorante (ml) */}
+              <InputField
+                label="Cantidad de Colorante (ml)"
+                type="number"
+                unit="ml"
+                placeholder="Ej: 50"
+                value={cantidadColorante === '' ? '' : cantidadColorante}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? '' : Number(e.target.value);
+                  setCantidadColorante(val);
+                }}
+                hint="Dosificación exacta en ml"
+              />
+
+              {/* Insumo 4: Lote de Colorante */}
+              <InputField
+                label="Lote de Colorante"
+                type="text"
+                placeholder={isYogur ? 'Ej: COL-2026-10A' : 'Ej: COL-KUM-2026'}
+                value={loteColorante}
+                onChange={(e) => setLoteColorante(e.target.value)}
+                hint="Código del frasco de colorante"
+              />
+            </div>
+
+            {/* Edición manual de hora de preparación de la receta con PopoverTimePicker */}
+            {manualPaso1 && (
+              <div className="p-4 rounded-xl bg-amber-50/90 border-2 border-amber-300 flex flex-col sm:flex-row items-end gap-3 justify-between">
+                <div className="w-full sm:max-w-xs">
+                  <PopoverTimePicker
+                    label="Hora en que se confirmó la receta"
+                    icon="schedule"
+                    hint="Toca para desplegar selector flotante (hh:mm:ss a)"
+                    value={horaManualReceta}
+                    onChange={setHoraManualReceta}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  icon="save"
+                  onClick={handleSaveManualReceta}
+                  className="w-full sm:w-auto font-bold"
+                >
+                  Guardar Hora de Receta
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+      ) : (
+        /* PASO 01 ALTERNATIVO (SIN AZÚCAR): ¡ADICIÓN DE STEVIA! */
+        <Card
+          stepBadge="Paso 01"
+          title="¡Adición de Stevia!"
+          subtitle="Dosifica la cantidad exacta de stevia según la formulación del lote para endulzar el producto sin azúcar."
+          icon="eco"
+          tone={isSteviaConfirmada ? 'completed' : 'active'}
+          statusBadge={
+            isSteviaConfirmada
+              ? {
+                  label: `Stevia Agregada (${horaSteviaDisplay || 'Confirmada'}) ✓`,
+                  variant: 'success',
+                }
+              : { label: 'Por Agregar', variant: 'warning' }
+          }
+          headerAction={
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-[#5d564a] bg-[#f4efe6] px-3 py-1.5 rounded-lg border border-[#e6decb] hover:bg-[#ede5d6] transition-colors">
+                <input
+                  type="checkbox"
+                  checked={manualPaso1Stevia}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setManualPaso1Stevia(checked);
+                    onChange((p: any) => ({
+                      ...p,
+                      adiciones: { ...p.adiciones, esManualStevia: checked },
+                    }));
+                  }}
+                  className="rounded border-[#cfc4b0] text-[#1e1b18] focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                />
+                <span>Habilitar edición manual</span>
+              </label>
+
+              {/* Botón de confirmación tipo "¡Ya agregué la stevia!" */}
+              <Button
+                variant={isSteviaConfirmada ? 'secondary' : 'primary'}
+                size="md"
+                icon="check_circle"
+                onClick={handleConfirmStevia}
+                className={
+                  isSteviaConfirmada
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold'
+                    : 'font-bold shadow-sm'
+                }
+              >
+                {isSteviaConfirmada
+                  ? `✓ ¡Ya agregué la stevia! (${horaSteviaDisplay || 'OK'})`
+                  : '¡Ya agregué la stevia!'}
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Insumo 1: Cantidad de Stevia (g) */}
+              <InputField
+                label="Cantidad de Stevia (g)"
+                type="number"
+                unit="g"
+                placeholder="Ej: 80"
+                value={cantidadStevia === '' ? '' : cantidadStevia}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? '' : Number(e.target.value);
+                  setCantidadStevia(val);
+                }}
+                hint={`Dosificación sugerida: ${(litrosLecheBase * 0.8).toFixed(0)} g para ${litrosLecheBase} L`}
+              />
+
+              {/* Insumo 2: Lote de Stevia (Selector desplegable) */}
+              <SelectField
+                label="Lote de Stevia"
+                icon="eco"
+                options={LOTES_STEVIA_OPTIONS}
+                value={loteStevia}
+                onChange={(e) => setLoteStevia(e.target.value)}
+                hint="Selecciona el lote del insumo edulcorante"
+              />
+
+              {/* Resumen / Estado de Adición */}
+              <div className="p-3.5 bg-[#fcfaf7] rounded-xl border border-[#e6decb] flex flex-col justify-between">
+                <span className="text-[11px] uppercase font-bold text-[#5d564a]">
+                  Hora de Adición
+                </span>
+                <div className="text-xl font-black font-mono text-[#1e1b18] mt-1">
+                  {horaSteviaDisplay || '--:--:--'}
+                </div>
+                <span className="text-[11px] text-[#7a7164] mt-1 block">
+                  {isSteviaConfirmada
+                    ? 'Registrada al pulsar confirmación'
+                    : 'Pendiente de registrar'}
+                </span>
+              </div>
+            </div>
+
+            {/* Edición manual de hora de adición con PopoverTimePicker */}
+            {manualPaso1Stevia && (
+              <div className="p-4 rounded-xl bg-amber-50/90 border-2 border-amber-300 flex flex-col sm:flex-row items-end gap-3 justify-between">
+                <div className="w-full sm:max-w-xs">
+                  <PopoverTimePicker
+                    label="Hora en que se agregó la stevia"
+                    icon="schedule"
+                    hint="Toca para desplegar selector flotante (hh:mm:ss a)"
+                    value={horaManualStevia}
+                    onChange={setHoraManualStevia}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  icon="save"
+                  onClick={handleSaveManualStevia}
+                  className="w-full sm:w-auto font-bold"
+                >
+                  Guardar Hora de Stevia
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* ========================================================================= */}
       {/* PASO 02: PROCESO DE BATIDO (ESTRUCTURA IDÉNTICA A HILAR Y AMASAR)         */}
@@ -567,7 +765,7 @@ export const BatidoYSaboresStageCommon: React.FC<BatidoYSaboresStageCommonProps>
             ? 'completed'
             : isBatidoRunning
             ? 'active'
-            : isRecetaConfirmada
+            : isPaso1Listo
             ? 'default'
             : 'default'
         }
@@ -579,9 +777,14 @@ export const BatidoYSaboresStageCommon: React.FC<BatidoYSaboresStageCommonProps>
               }
             : isBatidoRunning
             ? { label: 'Batiendo en Tolva...', variant: 'warning', pulse: true }
-            : isRecetaConfirmada
+            : isPaso1Listo
             ? { label: 'Listo para Iniciar', variant: 'info' }
-            : { label: 'Bloqueado (Define Receta)', variant: 'neutral' }
+            : {
+                label: llevaAzucar
+                  ? 'Bloqueado (Define Receta)'
+                  : 'Bloqueado (Agrega Stevia)',
+                variant: 'neutral',
+              }
         }
         headerAction={
           <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
@@ -590,7 +793,7 @@ export const BatidoYSaboresStageCommon: React.FC<BatidoYSaboresStageCommonProps>
               variant={state.batidora.iniciado ? 'secondary' : 'primary'}
               size="md"
               icon="play_circle"
-              disabled={Boolean(state.batidora.iniciado) || !isRecetaConfirmada}
+              disabled={Boolean(state.batidora.iniciado) || !isPaso1Listo}
               onClick={handleStartBatido}
               className="font-bold shadow-2xs"
             >
@@ -710,9 +913,11 @@ export const BatidoYSaboresStageCommon: React.FC<BatidoYSaboresStageCommonProps>
                   info
                 </span>
                 <span>
-                  {isRecetaConfirmada
+                  {isPaso1Listo
                     ? 'Presiona "Iniciar batido" para marcar la hora de inicio y activar el cronómetro.'
-                    : 'Primero debes confirmar que la receta está lista en el Paso 1 para poder iniciar el batido.'}
+                    : llevaAzucar
+                    ? 'Primero debes confirmar que la receta está lista en el Paso 1 para poder iniciar el batido.'
+                    : 'Primero debes confirmar la adición de stevia en el Paso 1 para poder iniciar el batido.'}
                 </span>
               </div>
             )

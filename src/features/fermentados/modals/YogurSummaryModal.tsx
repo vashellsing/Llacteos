@@ -70,15 +70,33 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
 
   const { pasteurizacion, inoculacion, maduracionFrio, batidoYAdiciones, envasado } = batch;
 
-  // 1. Cálculos de envasado (Botella 200 ml, Botella 1 L, Botella 2 L, Bolsa 4 L)
-  const u200ml = (envasado.formatos.botella200ml ?? envasado.formatos.vaso200g) || 0;
-  const u1L = (envasado.formatos.botella1L ?? envasado.formatos.botella1000g) || 0;
-  const u2L = envasado.formatos.botella2L || 0;
-  const u4L = envasado.formatos.bolsa4L || 0;
+  // 1. Cálculos de envasado (agregando presentaciones tradicionales y categorías Sin Azúcar / Stevia)
+  const uSinAzucar_200ml = envasado.formatos.sinAzucar_botella200ml || 0;
+  const uSinAzucar_1L = envasado.formatos.sinAzucar_botella1L || 0;
+  const uSinAzucar_2L = envasado.formatos.sinAzucar_botella2L || 0;
+  const uSinAzucar_4L = envasado.formatos.sinAzucar_bolsa4L || 0;
 
-  const totalUnidades = u200ml + u1L + u2L + u4L;
+  const uStevia_120ml = envasado.formatos.stevia_botella120ml || 0;
+  const uStevia_200ml = envasado.formatos.stevia_botella200ml || 0;
+  const uStevia_1L = envasado.formatos.stevia_botella1L || 0;
+  const uStevia_2L = envasado.formatos.stevia_botella2L || 0;
+  const uStevia_4L = envasado.formatos.stevia_bolsa4L || 0;
+
+  const uTrad_120ml = envasado.formatos.botella120ml || 0;
+  const uTrad_200ml = (envasado.formatos.botella200ml ?? envasado.formatos.vaso200g) || 0;
+  const uTrad_1L = (envasado.formatos.botella1L ?? envasado.formatos.botella1000g) || 0;
+  const uTrad_2L = envasado.formatos.botella2L || 0;
+  const uTrad_4L = envasado.formatos.bolsa4L || 0;
+
+  const u120ml = uStevia_120ml + uTrad_120ml;
+  const u200ml = uSinAzucar_200ml + uStevia_200ml + uTrad_200ml;
+  const u1L = uSinAzucar_1L + uStevia_1L + uTrad_1L;
+  const u2L = uSinAzucar_2L + uStevia_2L + uTrad_2L;
+  const u4L = uSinAzucar_4L + uStevia_4L + uTrad_4L;
+
+  const totalUnidades = u120ml + u200ml + u1L + u2L + u4L;
   const totalLitrosEnvasados = Number(
-    (u200ml * 0.2 + u1L * 1.0 + u2L * 2.0 + u4L * 4.0).toFixed(2)
+    (u120ml * 0.12 + u200ml * 0.2 + u1L * 1.0 + u2L * 2.0 + u4L * 4.0).toFixed(2)
   );
   const totalKilosEnvasados = Math.round((totalLitrosEnvasados * 1.03) * 100) / 100;
   const totalGramosEnvasados = Math.round(totalKilosEnvasados * 1000);
@@ -1264,7 +1282,7 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       {totalUnidades} envases ({totalLitrosEnvasados.toFixed(1)} L)
                     </span>
                     <span className="text-[9px] text-gray-500 mt-0.5">
-                      200ml: {u200ml} · 1L: {u1L} · 2L: {u2L} · 4L: {u4L}
+                      {u120ml > 0 ? `120ml: ${u120ml} · ` : ''}200ml: {u200ml} · 1L: {u1L} · 2L: {u2L} · 4L: {u4L}
                     </span>
                   </div>
 
@@ -1343,7 +1361,7 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                   <strong>Trazabilidad de Insumos:</strong> Materia prima láctea correspondiente a <strong>{pasteurizacion.litrosLeche} L</strong> (Lote Leche: <strong>{pasteurizacion.loteLeche}</strong>), tratada térmicamente a <strong>{pasteurizacion.calentamiento.temperaturaAlcanzada || 88.0} °C</strong> durante <strong>{pasteurizacion.calentamiento.tiempoCalentamiento || '80 min'}</strong> y enfriada a <strong>{pasteurizacion.enfriamiento.temperaturaFinal || 45.0} °C</strong>. Inoculada con <strong>{inoculacion.cantidadCultivoGramos || 2.5} g</strong> de cultivo láctico probiótico (Lote: <strong>{inoculacion.loteCultivo}</strong>), con incubación térmica por <strong>8 horas</strong> a <strong>{inoculacion.incubacion.temperaturaCamara || 43.0} °C</strong> (pH coágulo: <strong>{inoculacion.incubacion.phFinalIncubacion || 4.55}</strong>) y maduración en frío por <strong>12 horas</strong> a <strong>{maduracionFrio.refrigeracion.temperaturaCuartoFrio || 3.5} °C</strong> (pH frío: <strong>{maduracionFrio.refrigeracion.phFinalFrio || 4.45}</strong>).
                 </p>
                 <p>
-                  <strong>Producción Final Envasada:</strong> Se obtuvieron un total de <strong>{totalUnidades} envases sellados herméticamente</strong> ({u200ml} botellas de 200 ml, {u1L} botellas de 1 L, {u2L} botellas de 2 L y {u4L} bolsas de 4 L), totalizando <strong>{totalLitrosEnvasados.toFixed(1)} L netos</strong> ({totalKilosEnvasados.toFixed(2)} kg equivalentes) con un rendimiento global del <strong>{rendimientoPct.toFixed(1)}%</strong> sobre masa formulada. El lote fue ingresado a cuarto frío de estabilización por 1 día a 3.0 °C bajo el código de producto terminado <strong>{envasado.loteProductoTerminado}</strong> con fecha de vencimiento <strong>{envasado.fechaVencimiento}</strong>.
+                  <strong>Producción Final Envasada:</strong> Se obtuvieron un total de <strong>{totalUnidades} envases sellados herméticamente</strong> ({u120ml > 0 ? `${u120ml} botellas de 120 ml (Stevia), ` : ''}{u200ml} botellas de 200 ml, {u1L} botellas de 1 L, {u2L} botellas de 2 L y {u4L} bolsas de 4 L), totalizando <strong>{totalLitrosEnvasados.toFixed(1)} L netos</strong> ({totalKilosEnvasados.toFixed(2)} kg equivalentes) con un rendimiento global del <strong>{rendimientoPct.toFixed(1)}%</strong> sobre masa formulada. El lote fue ingresado a cuarto frío de estabilización por 1 día a 3.0 °C bajo el código de producto terminado <strong>{envasado.loteProductoTerminado}</strong> con fecha de vencimiento <strong>{envasado.fechaVencimiento}</strong>.
                 </p>
               </div>
 

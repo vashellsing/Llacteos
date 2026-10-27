@@ -4,6 +4,7 @@ import { EnvasadoStageCommon } from '../common/EnvasadoStageCommon';
 
 export interface EnvasadoYogurStageProps {
   batch: YogurBatchData;
+  llevaAzucar?: boolean;
   onChange: (
     updater: (prev: EnvasadoYAlmacenamientoYogurState) => EnvasadoYAlmacenamientoYogurState
   ) => void;
@@ -14,6 +15,7 @@ export interface EnvasadoYogurStageProps {
 
 export const EnvasadoYogurStage: React.FC<EnvasadoYogurStageProps> = ({
   batch,
+  llevaAzucar,
   onChange,
   onFinalizeProcess,
   onOpenReviewModal,
@@ -23,6 +25,7 @@ export const EnvasadoYogurStage: React.FC<EnvasadoYogurStageProps> = ({
     <EnvasadoStageCommon
       productType="yogur"
       batch={batch}
+      llevaAzucar={llevaAzucar}
       onChange={onChange as any}
       onFinalizeProcess={onFinalizeProcess}
       onOpenReviewModal={onOpenReviewModal}

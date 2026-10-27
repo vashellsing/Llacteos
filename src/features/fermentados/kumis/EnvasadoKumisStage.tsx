@@ -4,6 +4,7 @@ import { EnvasadoStageCommon } from '../common/EnvasadoStageCommon';
 
 export interface EnvasadoKumisStageProps {
   batch: KumisBatchData;
+  llevaAzucar?: boolean;
   onChange: (
     updater: (prev: EnvasadoYAlmacenamientoKumisState) => EnvasadoYAlmacenamientoKumisState
   ) => void;
@@ -14,6 +15,7 @@ export interface EnvasadoKumisStageProps {
 
 export const EnvasadoKumisStage: React.FC<EnvasadoKumisStageProps> = ({
   batch,
+  llevaAzucar,
   onChange,
   onFinalizeProcess,
   onOpenReviewModal,
@@ -23,6 +25,7 @@ export const EnvasadoKumisStage: React.FC<EnvasadoKumisStageProps> = ({
     <EnvasadoStageCommon
       productType="kumis"
       batch={batch}
+      llevaAzucar={llevaAzucar}
       onChange={onChange as any}
       onFinalizeProcess={onFinalizeProcess}
       onOpenReviewModal={onOpenReviewModal}

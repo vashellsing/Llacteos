@@ -19,57 +19,140 @@ export interface FormatConfig {
   placeholder: string;
 }
 
-const FORMAT_CONFIGS_YOGUR: FormatConfig[] = [
+// Presentaciones Con Azúcar (Línea Tradicional)
+export const FORMAT_CONFIGS_YOGUR_CON_AZUCAR: FormatConfig[] = [
   {
     key: 'botella200ml',
-    label: 'Botella 200 ml',
+    label: 'Botella de 200 ml',
     volumenTexto: '200 ml (0.2 L)',
     litrosPorUnidad: 0.2,
     placeholder: 'Ej: 100',
   },
   {
     key: 'botella1L',
-    label: 'Botella 1 L',
+    label: 'Botella de 1 L',
     volumenTexto: '1 Litro',
     litrosPorUnidad: 1.0,
     placeholder: 'Ej: 40',
   },
   {
     key: 'botella2L',
-    label: 'Botella 2 L',
+    label: 'Botella de 2 L',
     volumenTexto: '2 Litros',
     litrosPorUnidad: 2.0,
     placeholder: 'Ej: 15',
   },
   {
     key: 'bolsa4L',
-    label: 'Bolsa 4 L',
+    label: 'Bolsa de 4 L',
     volumenTexto: '4 Litros',
     litrosPorUnidad: 4.0,
     placeholder: 'Ej: 5',
   },
 ];
 
-const FORMAT_CONFIGS_KUMIS: FormatConfig[] = [
+export const FORMAT_CONFIGS_KUMIS_CON_AZUCAR: FormatConfig[] = [
   {
     key: 'botella1L',
-    label: 'Botella Kumis 1 L',
+    label: 'Botella de 1 L',
     volumenTexto: '1 Litro',
     litrosPorUnidad: 1.0,
     placeholder: 'Ej: 60',
   },
   {
     key: 'botella2L',
-    label: 'Botella Kumis 2 L',
+    label: 'Botella de 2 L',
     volumenTexto: '2 Litros',
     litrosPorUnidad: 2.0,
     placeholder: 'Ej: 20',
   },
 ];
 
+// Categoría 1: Envases "Sin Azúcar" (Natural) - 4 campos estrictos
+export const FORMAT_CONFIGS_SIN_AZUCAR_NATURAL: FormatConfig[] = [
+  {
+    key: 'sinAzucar_botella200ml',
+    label: 'Botella de 200 ml (Sin Azúcar)',
+    volumenTexto: '200 ml (0.2 L)',
+    litrosPorUnidad: 0.2,
+    placeholder: 'Ej: 50',
+  },
+  {
+    key: 'sinAzucar_botella1L',
+    label: 'Botella de 1 L (Sin Azúcar)',
+    volumenTexto: '1 Litro',
+    litrosPorUnidad: 1.0,
+    placeholder: 'Ej: 30',
+  },
+  {
+    key: 'sinAzucar_botella2L',
+    label: 'Botella de 2 L (Sin Azúcar)',
+    volumenTexto: '2 Litros',
+    litrosPorUnidad: 2.0,
+    placeholder: 'Ej: 15',
+  },
+  {
+    key: 'sinAzucar_bolsa4L',
+    label: 'Bolsa de 4 L (Sin Azúcar)',
+    volumenTexto: '4 Litros',
+    litrosPorUnidad: 4.0,
+    placeholder: 'Ej: 5',
+  },
+];
+
+// Categoría 2: Envases "Con Stevia" - 5 campos estrictos
+export const FORMAT_CONFIGS_CON_STEVIA: FormatConfig[] = [
+  {
+    key: 'stevia_botella120ml',
+    label: 'Botella de 120 ml (Stevia)',
+    volumenTexto: '120 ml (0.12 L)',
+    litrosPorUnidad: 0.12,
+    placeholder: 'Ej: 50',
+  },
+  {
+    key: 'stevia_botella200ml',
+    label: 'Botella de 200 ml (Stevia)',
+    volumenTexto: '200 ml (0.2 L)',
+    litrosPorUnidad: 0.2,
+    placeholder: 'Ej: 50',
+  },
+  {
+    key: 'stevia_botella1L',
+    label: 'Botella de 1 L (Stevia)',
+    volumenTexto: '1 Litro',
+    litrosPorUnidad: 1.0,
+    placeholder: 'Ej: 30',
+  },
+  {
+    key: 'stevia_botella2L',
+    label: 'Botella de 2 L (Stevia)',
+    volumenTexto: '2 Litros',
+    litrosPorUnidad: 2.0,
+    placeholder: 'Ej: 15',
+  },
+  {
+    key: 'stevia_bolsa4L',
+    label: 'Bolsa de 4 L (Stevia)',
+    volumenTexto: '4 Litros',
+    litrosPorUnidad: 4.0,
+    placeholder: 'Ej: 5',
+  },
+];
+
+export const ALL_FORMAT_CONFIGS_SIN_AZUCAR: FormatConfig[] = [
+  ...FORMAT_CONFIGS_SIN_AZUCAR_NATURAL,
+  ...FORMAT_CONFIGS_CON_STEVIA,
+];
+
+export const FORMAT_CONFIGS_YOGUR = FORMAT_CONFIGS_YOGUR_CON_AZUCAR;
+export const FORMAT_CONFIGS_KUMIS = FORMAT_CONFIGS_KUMIS_CON_AZUCAR;
+export const FORMAT_CONFIGS_YOGUR_SIN_AZUCAR = ALL_FORMAT_CONFIGS_SIN_AZUCAR;
+export const FORMAT_CONFIGS_KUMIS_SIN_AZUCAR = ALL_FORMAT_CONFIGS_SIN_AZUCAR;
+
 export interface EnvasadoStageCommonProps {
   productType: 'yogur' | 'kumis';
   batch: YogurBatchData | KumisBatchData;
+  llevaAzucar?: boolean;
   onChange: (
     updater: (
       prev: EnvasadoYAlmacenamientoYogurState | EnvasadoYAlmacenamientoKumisState
@@ -83,6 +166,7 @@ export interface EnvasadoStageCommonProps {
 export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
   productType,
   batch,
+  llevaAzucar,
   onChange,
   onOpenReviewModal,
   showToast,
@@ -92,19 +176,54 @@ export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
   const pasteurizacion = (batch as any).pasteurizacion || {};
   const lecheBaseLitros = pasteurizacion.litrosLeche || 100;
 
-  const formatConfigs = isYogur ? FORMAT_CONFIGS_YOGUR : FORMAT_CONFIGS_KUMIS;
+  // Lógica condicional: Con Azúcar vs Sin Azúcar (Stevia)
+  const isConAzucar =
+    llevaAzucar !== undefined
+      ? llevaAzucar
+      : pasteurizacion.llevaAzucar !== undefined
+      ? pasteurizacion.llevaAzucar
+      : true;
+
+  const allActiveConfigs = useMemo(() => {
+    if (isConAzucar) {
+      return isYogur ? FORMAT_CONFIGS_YOGUR_CON_AZUCAR : FORMAT_CONFIGS_KUMIS_CON_AZUCAR;
+    }
+    return ALL_FORMAT_CONFIGS_SIN_AZUCAR;
+  }, [isConAzucar, isYogur]);
 
   // =========================================================================
   // PASO 01: CONTEO DE ENVASES Y EDICIÓN MANUAL
   // =========================================================================
   const [cantidades, setCantidades] = useState<{ [key: string]: number | '' }>(() => {
     const initial: { [key: string]: number | '' } = {};
-    formatConfigs.forEach((fmt) => {
+    const configs = isConAzucar
+      ? isYogur
+        ? FORMAT_CONFIGS_YOGUR_CON_AZUCAR
+        : FORMAT_CONFIGS_KUMIS_CON_AZUCAR
+      : ALL_FORMAT_CONFIGS_SIN_AZUCAR;
+
+    configs.forEach((fmt) => {
       const existingVal = (state.formatos as any)?.[fmt.key];
       initial[fmt.key] = existingVal && existingVal > 0 ? existingVal : '';
     });
     return initial;
   });
+
+  // Mantener sincronizado si cambian configs o state.formatos
+  useEffect(() => {
+    setCantidades((prev) => {
+      let hasChanges = false;
+      const next = { ...prev };
+      allActiveConfigs.forEach((fmt) => {
+        if (next[fmt.key] === undefined) {
+          const existingVal = (state.formatos as any)?.[fmt.key];
+          next[fmt.key] = existingVal && existingVal > 0 ? existingVal : '';
+          hasChanges = true;
+        }
+      });
+      return hasChanges ? next : prev;
+    });
+  }, [allActiveConfigs, state.formatos]);
 
   const hasInitialSaved = useMemo(() => {
     return Object.values(cantidades).some((v) => typeof v === 'number' && v > 0);
@@ -125,7 +244,7 @@ export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
 
   const handleGuardarFormatos = () => {
     const updatedFormatos: { [key: string]: number } = {};
-    formatConfigs.forEach((fmt) => {
+    allActiveConfigs.forEach((fmt) => {
       const v = cantidades[fmt.key];
       updatedFormatos[fmt.key] = typeof v === 'number' ? v : 0;
     });
@@ -140,24 +259,56 @@ export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
 
     setIsFormatosBloqueados(true);
     setIsManualFormatos(false);
-    showToast('✓ Conteo de envases guardado exitosamente. Inputs bloqueados.', 'success');
+    showToast('✓ Conteo de envases guardado exitosamente. Todos los inputs bloqueados.', 'success');
   };
 
-  // Totales y cálculos matemáticos
-  const totalUnidades = useMemo(() => {
-    return formatConfigs.reduce((acc, fmt) => {
+  // Subtotales Categoría 1: Sin Azúcar (Natural)
+  const subtotalUnidadesSinAzucar = useMemo(() => {
+    return FORMAT_CONFIGS_SIN_AZUCAR_NATURAL.reduce((acc, fmt) => {
       const count = typeof cantidades[fmt.key] === 'number' ? (cantidades[fmt.key] as number) : 0;
       return acc + count;
     }, 0);
-  }, [formatConfigs, cantidades]);
+  }, [cantidades]);
 
-  const totalLitrosEnvasados = useMemo(() => {
-    const sum = formatConfigs.reduce((acc, fmt) => {
+  const subtotalLitrosSinAzucar = useMemo(() => {
+    const sum = FORMAT_CONFIGS_SIN_AZUCAR_NATURAL.reduce((acc, fmt) => {
       const count = typeof cantidades[fmt.key] === 'number' ? (cantidades[fmt.key] as number) : 0;
       return acc + count * fmt.litrosPorUnidad;
     }, 0);
     return Number(sum.toFixed(2));
-  }, [formatConfigs, cantidades]);
+  }, [cantidades]);
+
+  // Subtotales Categoría 2: Con Stevia
+  const subtotalUnidadesStevia = useMemo(() => {
+    return FORMAT_CONFIGS_CON_STEVIA.reduce((acc, fmt) => {
+      const count = typeof cantidades[fmt.key] === 'number' ? (cantidades[fmt.key] as number) : 0;
+      return acc + count;
+    }, 0);
+  }, [cantidades]);
+
+  const subtotalLitrosStevia = useMemo(() => {
+    const sum = FORMAT_CONFIGS_CON_STEVIA.reduce((acc, fmt) => {
+      const count = typeof cantidades[fmt.key] === 'number' ? (cantidades[fmt.key] as number) : 0;
+      return acc + count * fmt.litrosPorUnidad;
+    }, 0);
+    return Number(sum.toFixed(2));
+  }, [cantidades]);
+
+  // Totales y cálculos matemáticos (sumando absolutamente TODOS los envases de ambas categorías)
+  const totalUnidades = useMemo(() => {
+    return allActiveConfigs.reduce((acc, fmt) => {
+      const count = typeof cantidades[fmt.key] === 'number' ? (cantidades[fmt.key] as number) : 0;
+      return acc + count;
+    }, 0);
+  }, [allActiveConfigs, cantidades]);
+
+  const totalLitrosEnvasados = useMemo(() => {
+    const sum = allActiveConfigs.reduce((acc, fmt) => {
+      const count = typeof cantidades[fmt.key] === 'number' ? (cantidades[fmt.key] as number) : 0;
+      return acc + count * fmt.litrosPorUnidad;
+    }, 0);
+    return Number(sum.toFixed(2));
+  }, [allActiveConfigs, cantidades]);
 
   const rendimientoPct = useMemo(() => {
     return lecheBaseLitros > 0 ? (totalLitrosEnvasados / lecheBaseLitros) * 100 : 0;
@@ -215,15 +366,69 @@ export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
 
   const areInputsLocked = isFormatosBloqueados && !isManualFormatos;
 
+  const renderFormatCard = (fmt: FormatConfig) => {
+    const countVal = cantidades[fmt.key];
+    const subtotalLitros =
+      (typeof countVal === 'number' ? countVal : 0) * fmt.litrosPorUnidad;
+
+    return (
+      <div
+        key={fmt.key}
+        className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col justify-between gap-3 transition-colors ${
+          areInputsLocked
+            ? 'bg-[#f8f5ee] border-[#e6decb]'
+            : 'bg-white border-[#d6ccb8] shadow-2xs'
+        }`}
+      >
+        <div>
+          <div className="flex items-center justify-between mb-2 gap-1.5">
+            <span className="text-xs font-black text-[#1e1b18] leading-tight">
+              {fmt.label}
+            </span>
+            <Badge variant="neutral" className="shrink-0">{fmt.volumenTexto}</Badge>
+          </div>
+
+          <InputField
+            label="Unidades Llenadas"
+            type="number"
+            min="0"
+            step="1"
+            unit="unid."
+            disabled={areInputsLocked}
+            readOnly={areInputsLocked}
+            placeholder={fmt.placeholder}
+            value={countVal === '' ? '' : countVal}
+            onChange={(e) => handleFormatChange(fmt.key, e.target.value)}
+          />
+        </div>
+
+        <div className="pt-2.5 border-t border-[#efe9dc] flex items-center justify-between text-xs">
+          <span className="text-[#5d564a] font-bold">Subtotal Litros:</span>
+          <span className="font-mono font-black text-amber-900 text-sm">
+            {subtotalLitros.toFixed(2)} L
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col w-full p-4 lg:p-6 gap-5 bg-[#fcfaf7] min-h-[calc(100vh-4rem)] pb-16">
       {/* CABECERA ESTÁNDAR MAESTRA */}
       <StageHeader
         stageNumber={4}
         totalStages={4}
-        lineName={isYogur ? 'Línea de Fermentados · Yogur' : 'Línea de Fermentados · Kumis'}
+        lineName={
+          isYogur
+            ? `Línea de Fermentados · Yogur (${isConAzucar ? 'Con Azúcar' : 'Sin Azúcar - Stevia'})`
+            : `Línea de Fermentados · Kumis (${isConAzucar ? 'Con Azúcar' : 'Sin Azúcar - Stevia'})`
+        }
         title="4. Envasar y Guardar"
-        subtitle="Conteo de envases por presentación comercial, balance y rendimiento del lote, y traslado final a cuarto frío."
+        subtitle={
+          isConAzucar
+            ? 'Conteo de envases por presentación comercial, balance y rendimiento del lote, y traslado final a cuarto frío.'
+            : 'Conteo de envases de la línea Sin Azúcar (Stevia), balance, rendimiento del lote y traslado final a cuarto frío.'
+        }
         standardBadge="NTC-805"
         metrics={[
           {
@@ -246,12 +451,20 @@ export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
       {/* ========================================================================= */}
       <Card
         stepBadge="Paso 01"
-        title="Conteo de Envases y Presentaciones"
-        subtitle="Ingresa la cantidad de unidades obtenidas en cada presentación comercial producida."
+        title={
+          isConAzucar
+            ? 'Conteo de Envases y Presentaciones'
+            : 'Conteo de Envases y Presentaciones (Sin Azúcar / Stevia)'
+        }
+        subtitle={
+          isConAzucar
+            ? 'Ingresa la cantidad de unidades obtenidas en cada presentación comercial producida.'
+            : 'Ingresa la cantidad de unidades obtenidas en cada categoría de empaque (Natural y Stevia).'
+        }
         icon="format_list_numbered"
         tone={hasInitialSaved ? 'completed' : 'default'}
         statusBadge={{
-          label: `${totalUnidades} unidades · ${totalLitrosEnvasados.toFixed(2)} L`,
+          label: `${totalUnidades} unidades · ${totalLitrosEnvasados.toFixed(2)} L totales`,
           variant: totalUnidades > 0 ? 'success' : 'info',
         }}
         headerAction={
@@ -280,57 +493,81 @@ export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
           </div>
         }
       >
-        <div
-          className={`grid grid-cols-1 sm:grid-cols-2 ${
-            isYogur ? 'lg:grid-cols-4' : 'lg:grid-cols-2'
-          } gap-4`}
-        >
-          {formatConfigs.map((fmt) => {
-            const countVal = cantidades[fmt.key];
-            const subtotalLitros =
-              (typeof countVal === 'number' ? countVal : 0) * fmt.litrosPorUnidad;
-
-            return (
-              <div
-                key={fmt.key}
-                className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 transition-colors ${
-                  areInputsLocked
-                    ? 'bg-[#f8f5ee] border-[#e6decb]'
-                    : 'bg-white border-[#d6ccb8] shadow-2xs'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black text-[#1e1b18]">
-                      {fmt.label}
-                    </span>
-                    <Badge variant="neutral">{fmt.volumenTexto}</Badge>
+        {!isConAzucar ? (
+          <div className="flex flex-col gap-6">
+            {/* ========================================================================= */}
+            {/* CATEGORÍA 1: ENVASES "SIN AZÚCAR" (NATURAL) - 4 CAMPOS                    */}
+            {/* ========================================================================= */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-[#faf7f0] border-2 border-[#e3d7be] shadow-2xs flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#e6decb] gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-900 shrink-0">
+                    <span className="material-symbols-outlined text-[20px]">water_drop</span>
                   </div>
-
-                  <InputField
-                    label="Unidades Llenadas"
-                    type="number"
-                    min="0"
-                    step="1"
-                    unit="unid."
-                    disabled={areInputsLocked}
-                    readOnly={areInputsLocked}
-                    placeholder={fmt.placeholder}
-                    value={countVal === '' ? '' : countVal}
-                    onChange={(e) => handleFormatChange(fmt.key, e.target.value)}
-                  />
+                  <div>
+                    <h4 className="text-sm font-black text-[#1e1b18] flex items-center gap-2">
+                      Categoría 1: Envases "Sin Azúcar" (Natural)
+                      <Badge variant="neutral">4 medidas</Badge>
+                    </h4>
+                    <p className="text-[11px] text-[#7a7164]">
+                      Base de yogur natural envasada sin ningún endulzante ni edulcorante.
+                    </p>
+                  </div>
                 </div>
-
-                <div className="pt-2.5 border-t border-[#efe9dc] flex items-center justify-between text-xs">
-                  <span className="text-[#5d564a] font-bold">Subtotal Litros:</span>
-                  <span className="font-mono font-black text-amber-900 text-sm">
-                    {subtotalLitros.toFixed(2)} L
-                  </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant={subtotalUnidadesSinAzucar > 0 ? 'success' : 'neutral'}>
+                    Subtotal: {subtotalUnidadesSinAzucar} u. · {subtotalLitrosSinAzucar.toFixed(2)} L
+                  </Badge>
                 </div>
               </div>
-            );
-          })}
-        </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                {FORMAT_CONFIGS_SIN_AZUCAR_NATURAL.map((fmt) => renderFormatCard(fmt))}
+              </div>
+            </div>
+
+            {/* ========================================================================= */}
+            {/* CATEGORÍA 2: ENVASES "CON STEVIA" - 5 CAMPOS                              */}
+            {/* ========================================================================= */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/40 border-2 border-emerald-200/90 shadow-2xs flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-emerald-200 gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-900 shrink-0">
+                    <span className="material-symbols-outlined text-[20px]">eco</span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-emerald-950 flex items-center gap-2">
+                      Categoría 2: Envases "Con Stevia"
+                      <Badge variant="success">5 medidas</Badge>
+                    </h4>
+                    <p className="text-[11px] text-emerald-800">
+                      Base endulzada con estevia. Incluye el envase exclusivo de 120 ml.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant={subtotalUnidadesStevia > 0 ? 'success' : 'neutral'}>
+                    Subtotal: {subtotalUnidadesStevia} u. · {subtotalLitrosStevia.toFixed(2)} L
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
+                {FORMAT_CONFIGS_CON_STEVIA.map((fmt) => renderFormatCard(fmt))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`grid gap-4 ${
+              allActiveConfigs.length === 4
+                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+                : 'grid-cols-1 sm:grid-cols-2'
+            }`}
+          >
+            {allActiveConfigs.map((fmt) => renderFormatCard(fmt))}
+          </div>
+        )}
       </Card>
 
       {/* ========================================================================= */}
@@ -364,7 +601,9 @@ export const EnvasadoStageCommon: React.FC<EnvasadoStageCommonProps> = ({
               {totalLitrosEnvasados.toFixed(2)} L
             </div>
             <span className="text-[11px] text-amber-800 mt-1 block">
-              Suma de todas las presentaciones ({totalUnidades} u.)
+              {!isConAzucar
+                ? `Sin Azúcar (${subtotalLitrosSinAzucar.toFixed(1)} L) + Stevia (${subtotalLitrosStevia.toFixed(1)} L)`
+                : `Suma de todas las presentaciones (${totalUnidades} u.)`}
             </span>
           </div>
 

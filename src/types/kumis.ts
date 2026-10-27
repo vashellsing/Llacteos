@@ -229,8 +229,23 @@ export interface EnvasadoYAlmacenamientoKumisState {
 
   // REGLA 8: Presentaciones del kumis: SOLO Kumis 1 L y Kumis 2 L. Eliminar cualquier otra presentación.
   formatos: {
+    botella120ml?: number; // Botella 120 ml (Stevia)
     botella1L: number; // Kumis 1 L
     botella2L: number; // Kumis 2 L
+
+    // Categoría 1: Envases "Sin Azúcar" (Natural)
+    sinAzucar_botella200ml?: number;
+    sinAzucar_botella1L?: number;
+    sinAzucar_botella2L?: number;
+    sinAzucar_bolsa4L?: number;
+
+    // Categoría 2: Envases "Con Stevia"
+    stevia_botella120ml?: number;
+    stevia_botella200ml?: number;
+    stevia_botella1L?: number;
+    stevia_botella2L?: number;
+    stevia_bolsa4L?: number;
+
     // Compat opcional
     botella1000g?: number;
     botella500g?: number;
@@ -482,10 +497,20 @@ export const INITIAL_KUMIS_BATCH: KumisBatchData = {
     fechaProduccion: '2026-10-20',
     fechaVencimiento: '2026-11-14',
     temperaturaEnvasado: 6.5,
-    // REGLA 8: Solo Kumis 1 L y Kumis 2 L
+    // REGLA 8: Solo Kumis 1 L y Kumis 2 L (con botella 120 ml si es sin azúcar)
     formatos: {
+      botella120ml: 0,
       botella1L: 0,
       botella2L: 0,
+      sinAzucar_botella200ml: 0,
+      sinAzucar_botella1L: 0,
+      sinAzucar_botella2L: 0,
+      sinAzucar_bolsa4L: 0,
+      stevia_botella120ml: 0,
+      stevia_botella200ml: 0,
+      stevia_botella1L: 0,
+      stevia_botella2L: 0,
+      stevia_bolsa4L: 0,
     },
     selladoVerificado: false,
     rotuladoCumpleNTC805: false,
