@@ -57,17 +57,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ? [
         { id: 'acidificar', label: '1. Pasteurizar Leche', icon: 'local_fire_department' },
         { id: 'calentar-y-cuajar', label: '2. Inocular e Incubar', icon: 'biotech' },
-        { id: 'desuerar', label: '3. Cuarto Frío (12 h)', icon: 'kitchen' },
-        { id: 'hilar', label: '4. Batido y Azúcar', icon: 'blender' },
-        { id: 'moldeo', label: '5. Envasar y Guardar', icon: 'inventory_2' },
+        { id: 'hilar', label: '3. Batido y Sabores', icon: 'blender' },
+        { id: 'moldeo', label: '4. Envasar y Guardar', icon: 'inventory_2' },
       ]
     : isYogur
     ? [
         { id: 'acidificar', label: '1. Pasteurizar Leche', icon: 'local_fire_department' },
         { id: 'calentar-y-cuajar', label: '2. Inocular e Incubar', icon: 'biotech' },
-        { id: 'desuerar', label: '3. Cuarto Frío (12 h)', icon: 'kitchen' },
-        { id: 'hilar', label: '4. Batido y Sabores', icon: 'blender' },
-        { id: 'moldeo', label: '5. Envasar y Guardar', icon: 'inventory_2' },
+        { id: 'hilar', label: '3. Batido y Sabores', icon: 'blender' },
+        { id: 'moldeo', label: '4. Envasar y Guardar', icon: 'inventory_2' },
       ]
     : isQueso7Cueros
     ? [

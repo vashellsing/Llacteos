@@ -1,6 +1,7 @@
 export interface PasteurizacionKumisState {
   litrosLeche: number;
   loteLeche: string;
+  loteCultivoLacticoPastur?: string;
   acidezDornic: number; // 16 °D
   phRecepcion: number; // 6.65
   temperaturaRecepcion: number; // 4.5 °C
@@ -97,9 +98,13 @@ export interface InoculacionKumisState {
   cantidadCultivoCucharadas: number; // Calculado (1 cucharada / 40 L)
   cantidadCultivoGramos?: number; // 2.5 g DVI para 100 L (compat)
   tiempoMezcladoMinutos: number; // 5 min
+  tiempoMezcladoCalculado?: string | null;
+  horaInicioMezclado?: string | null;
   mezcladoConfirmado: boolean;
   inoculacionConfirmada: boolean; // Pulsado: "Ya inoculé y mezclé"
   horaInoculacion: string | null;
+  esManualMezclado?: boolean;
+  esManualIncubacion?: boolean;
 
   // Cronómetro de reposo / incubación AUTOMÁTICO por 12 horas a 22-26 °C
   incubacion: {
@@ -183,6 +188,14 @@ export interface BatidoYAdicionesKumisState {
     };
 
     // Controles de guardado y manual
+    recetaConfirmada?: boolean;
+    horaPreparacionReceta?: string | null;
+    esManualReceta?: boolean;
+    sabor?: string;
+    coloranteMl?: number;
+    loteColorante?: string;
+    saborizanteMl?: number;
+    loteSaborizante?: string;
     habilitarModificacionManual: boolean;
     registrado: boolean;
     horaRegistro: string | null;
@@ -309,6 +322,7 @@ export const INITIAL_KUMIS_BATCH: KumisBatchData = {
   pasteurizacion: {
     litrosLeche: 100,
     loteLeche: 'LE-2026-KUM-01',
+    loteCultivoLacticoPastur: 'CUL-2026-10B',
     acidezDornic: 16.0,
     phRecepcion: 6.65,
     temperaturaRecepcion: 4.5,
@@ -386,12 +400,16 @@ export const INITIAL_KUMIS_BATCH: KumisBatchData = {
     temperaturaConfirmada: false,
     loteCultivo: 'CULT-KUM-2026-02',
     cepasCultivo: 'Lactococcus lactis subsp. lactis, subsp. cremoris, biovar diacetylactis',
-    cantidadCultivoCucharadas: 2.5, // 100 L / 40 = 2.5 cucharadas
-    cantidadCultivoGramos: 2.5,
+    cantidadCultivoCucharadas: 0, // Se calcula dinámicamente como litros / 40
+    cantidadCultivoGramos: 0,
     tiempoMezcladoMinutos: 5,
+    tiempoMezcladoCalculado: null,
+    horaInicioMezclado: null,
     mezcladoConfirmado: false,
     inoculacionConfirmada: false,
     horaInoculacion: null,
+    esManualMezclado: false,
+    esManualIncubacion: false,
     incubacion: {
       iniciada: false,
       completada: false,
@@ -466,8 +484,8 @@ export const INITIAL_KUMIS_BATCH: KumisBatchData = {
     temperaturaEnvasado: 6.5,
     // REGLA 8: Solo Kumis 1 L y Kumis 2 L
     formatos: {
-      botella1L: 60, // Kumis 1 L
-      botella2L: 20, // Kumis 2 L
+      botella1L: 0,
+      botella2L: 0,
     },
     selladoVerificado: false,
     rotuladoCumpleNTC805: false,

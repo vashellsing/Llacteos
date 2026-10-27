@@ -2,6 +2,7 @@ import React from 'react';
 import { AppView, UserRole } from '../../types';
 import { useBatchManager } from '../../hooks/useBatchManager';
 import { SubBatchSwitcherBar } from '../../components/shared/SubBatchSwitcherBar';
+import { Button, Card } from '../../components/ui';
 
 // PASTA HILADA · DOBLE CREMA (PREMIUM E INDUSTRIAL UNIFICADOS)
 import {
@@ -100,7 +101,34 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
     setYogurReviewModalOpen,
     setKumisReviewModalOpen,
     setYogurGriegoReviewModalOpen,
+    setCurrentStage,
   } = batchManager;
+
+  const handleInoculacionToBatidoYSabores = React.useCallback(() => {
+    if (isKumis) {
+      setBatchKumis((prev) => ({
+        ...prev,
+        stageStatuses: {
+          ...prev.stageStatuses,
+          'calentar-y-cuajar': 'completada',
+          desuerar: 'completada',
+          hilar: 'en_proceso',
+        },
+      }));
+    } else if (isYogur) {
+      setBatchYogur((prev) => ({
+        ...prev,
+        stageStatuses: {
+          ...prev.stageStatuses,
+          'calentar-y-cuajar': 'completada',
+          desuerar: 'completada',
+          hilar: 'en_proceso',
+        },
+      }));
+    }
+    setCurrentStage('hilar');
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [isKumis, isYogur, setBatchKumis, setBatchYogur, setCurrentStage]);
 
   return (
     <div className="flex flex-col flex-1">
@@ -268,27 +296,45 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
                 batchKumis.pasteurizacion.enfriamiento.horaFinEnfriamiento
               }
               litrosLecheBase={batchKumis.pasteurizacion.litrosLeche}
+              loteCultivoBase={
+                batchKumis.pasteurizacion.loteCultivoLacticoPastur ||
+                (batchKumis.pasteurizacion as any).loteCultivoLactico
+              }
               processTimer={batchKumis.processTimer}
-              onNextStage={handleNextStage}
+              onNextStage={handleInoculacionToBatidoYSabores}
+              onGoToBatidoYSabores={handleInoculacionToBatidoYSabores}
               onOpenReviewModal={() => setKumisReviewModalOpen(true)}
               showToast={showToast}
             />
           )}
 
           {currentStage === 'desuerar' && (
-            <MaduracionFrioStageKumis
-              state={batchKumis.maduracionFrio}
-              onChange={(updater) =>
-                setBatchKumis((prev) => ({
-                  ...prev,
-                  maduracionFrio: updater(prev.maduracionFrio),
-                }))
-              }
-              processTimer={batchKumis.processTimer}
-              onNextStage={handleNextStage}
-              onOpenReviewModal={() => setKumisReviewModalOpen(true)}
-              showToast={showToast}
-            />
+            <div className="flex flex-col w-full p-4 lg:p-6 gap-5 bg-[#fcfaf7] min-h-[calc(100vh-4rem)]">
+              <Card
+                title="Fase de Cuarto Frío Integrada"
+                subtitle="El Kumis fue ingresado a cuarto frío al finalizar la incubación. No requiere registros de cronómetros intermedios."
+                icon="kitchen"
+                tone="completed"
+              >
+                <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-sm mb-4">
+                  ✓ El producto se encuentra en reposo en cuarto frío desde las{' '}
+                  <strong>
+                    {batchKumis.inoculacion.incubacion.horaEntradaCuartoFrio ||
+                      batchKumis.inoculacion.incubacion.horaFin ||
+                      'la incubación'}
+                  </strong>
+                  . La siguiente etapa operativa es <strong>3. Batido y Sabores</strong>.
+                </div>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  iconRight="arrow_forward"
+                  onClick={() => setCurrentStage('hilar')}
+                >
+                  Ir a 3. Batido y Sabores
+                </Button>
+              </Card>
+            </div>
           )}
 
           {currentStage === 'hilar' && (
@@ -300,6 +346,7 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
                   batidoYAdiciones: updater(prev.batidoYAdiciones),
                 }))
               }
+              llevaAzucar={batchKumis.pasteurizacion.llevaAzucar}
               litrosLecheBase={batchKumis.pasteurizacion.litrosLeche}
               processTimer={batchKumis.processTimer}
               onNextStage={handleNextStage}
@@ -360,8 +407,13 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
                 batchYogur.pasteurizacion.enfriamiento.horaFinEnfriamiento
               }
               litrosLecheBase={batchYogur.pasteurizacion.litrosLeche}
+              loteCultivoBase={
+                batchYogur.pasteurizacion.loteCultivoLacticoPastur ||
+                (batchYogur.pasteurizacion as any).loteCultivoLactico
+              }
               processTimer={batchYogur.processTimer}
-              onNextStage={handleNextStage}
+              onNextStage={handleInoculacionToBatidoYSabores}
+              onGoToBatidoYSabores={handleInoculacionToBatidoYSabores}
               onFinalizeProcess={handleFinalizeYogurBatch}
               onOpenReviewModal={() => setYogurReviewModalOpen(true)}
               showToast={showToast}
@@ -369,19 +421,32 @@ export const BatchExecutionPage: React.FC<BatchExecutionPageProps> = ({
           )}
 
           {currentStage === 'desuerar' && (
-            <MaduracionFrioStageYogur
-              state={batchYogur.maduracionFrio}
-              onChange={(updater) =>
-                setBatchYogur((prev) => ({
-                  ...prev,
-                  maduracionFrio: updater(prev.maduracionFrio),
-                }))
-              }
-              processTimer={batchYogur.processTimer}
-              onNextStage={handleNextStage}
-              onOpenReviewModal={() => setYogurReviewModalOpen(true)}
-              showToast={showToast}
-            />
+            <div className="flex flex-col w-full p-4 lg:p-6 gap-5 bg-[#fcfaf7] min-h-[calc(100vh-4rem)]">
+              <Card
+                title="Fase de Cuarto Frío Integrada"
+                subtitle="El Yogur fue ingresado a cuarto frío al finalizar la incubación. No requiere registros de cronómetros intermedios."
+                icon="kitchen"
+                tone="completed"
+              >
+                <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 text-sm mb-4">
+                  ✓ El producto se encuentra en reposo en cuarto frío desde las{' '}
+                  <strong>
+                    {batchYogur.inoculacion.incubacion.horaEntradaCuartoFrio ||
+                      batchYogur.inoculacion.incubacion.horaFin ||
+                      'la incubación'}
+                  </strong>
+                  . La siguiente etapa operativa es <strong>3. Batido y Sabores</strong>.
+                </div>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  iconRight="arrow_forward"
+                  onClick={() => setCurrentStage('hilar')}
+                >
+                  Ir a 3. Batido y Sabores
+                </Button>
+              </Card>
+            </div>
           )}
 
           {currentStage === 'hilar' && (

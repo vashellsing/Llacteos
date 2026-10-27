@@ -104,9 +104,13 @@ export interface InoculacionYogurState {
   cantidadCultivoCucharadas: number; // 1 cucharada por cada 40 L (calculado, editable)
   cantidadCultivoGramos?: number; // compat
   tiempoMezcladoMinutos: number; // 5 min
+  tiempoMezcladoCalculado?: string | null;
+  horaInicioMezclado?: string | null;
   mezcladoConfirmado: boolean;
   inoculacionConfirmada: boolean; // Pulsado: "Ya inoculé y mezclé"
   horaInoculacion: string | null;
+  esManualMezclado?: boolean;
+  esManualIncubacion?: boolean;
 
   // Cronómetro de reposo/incubación automático por mínimo 8 horas a 42-45 °C
   incubacion: {
@@ -223,6 +227,13 @@ export interface BatidoYAdicionesYogurState {
     };
 
     // Controles de guardado y manual
+    recetaConfirmada?: boolean;
+    horaPreparacionReceta?: string | null;
+    esManualReceta?: boolean;
+    coloranteMl?: number;
+    loteColorante?: string;
+    saborizanteMl?: number;
+    loteSaborizante?: string;
     habilitarModificacionManual: boolean;
     registrado: boolean;
     horaRegistro: string | null;
@@ -437,12 +448,16 @@ export const INITIAL_YOGUR_BATCH: YogurBatchData = {
     temperaturaConfirmada: false,
     loteCultivo: 'CULT-PROB-2026-04',
     cepasProbioticas: 'Lactobacillus bulgaricus, Streptococcus thermophilus, Bifidobacterium lactis',
-    cantidadCultivoCucharadas: 2.5, // 100 L / 40 = 2.5 cucharadas
-    cantidadCultivoGramos: 2.5,
+    cantidadCultivoCucharadas: 0, // Se calcula dinámicamente como litros / 40
+    cantidadCultivoGramos: 0,
     tiempoMezcladoMinutos: 5,
+    tiempoMezcladoCalculado: null,
+    horaInicioMezclado: null,
     mezcladoConfirmado: false,
     inoculacionConfirmada: false,
     horaInoculacion: null,
+    esManualMezclado: false,
+    esManualIncubacion: false,
     incubacion: {
       iniciada: false,
       completada: false,
@@ -545,10 +560,10 @@ export const INITIAL_YOGUR_BATCH: YogurBatchData = {
     fechaVencimiento: '14/11/2026',
     temperaturaEnvasado: 6.5,
     formatos: {
-      botella200ml: 100, // Botella 200 ml
-      botella1L: 40,     // Botella 1 L
-      botella2L: 15,     // Botella 2 L
-      bolsa4L: 5,        // Bolsa 4 L
+      botella200ml: 0,
+      botella1L: 0,
+      botella2L: 0,
+      bolsa4L: 0,
     },
     formatosKumis: {
       tarro1L: 0,
