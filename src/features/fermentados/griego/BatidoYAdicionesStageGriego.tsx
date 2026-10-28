@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
 import { BatidoYAdicionesYogurGriegoState } from '../../../types/yogur_griego';
 import { ProcessTimerState } from '../../../types';
-import { formatHumanDuration, getCurrentTimeString } from '../../../utils/timer';
+import {
+  computeDurationBetweenTimes,
+  formatHumanDuration,
+  formatTimeFromStep1,
+  getCurrentTimeString,
+} from '../../../utils/timer';
 import { useStageCountdown } from '../../../hooks/useStageCountdown';
 import {
   StageHeader,
   Card,
   InputField,
-  ConfirmButton,
-  TimerBanner,
+  SelectField,
+  SelectOption,
   Button,
-  Badge,
+  PopoverTimePicker,
+  TimerBanner,
 } from '../../../components/ui';
 
 interface BatidoYAdicionesStageGriegoProps {
@@ -27,30 +33,113 @@ interface BatidoYAdicionesStageGriegoProps {
   showToast: (msg: string, type?: 'success' | 'info' | 'warning') => void;
 }
 
+const LOTES_STEVIA_OPTIONS: SelectOption[] = [
+  { value: 'EST-2026-01', label: 'EST-2026-01 (Stevia Orgánica 98% Reb A)' },
+  { value: 'EST-2026-02', label: 'EST-2026-02 (Stevia Alta Pureza Bio)' },
+  { value: 'EST-2026-03', label: 'EST-2026-03 (Extracto Puro de Stevia)' },
+];
+
 export const BatidoYAdicionesStageGriego: React.FC<
   BatidoYAdicionesStageGriegoProps
-> = ({ state, onChange, baseFiltradaKg = 35, onNextStage, showToast }) => {
+> = ({ state, onChange, onNextStage, showToast }) => {
   const { batido, formulacion } = state;
-  const [batidoStartTimestamp, setBatidoStartTimestamp] = useState<number | null>(null);
 
+  // Estado Paso 1: Insumo Stevia
+  const [cantidadSteviaInput, setCantidadSteviaInput] = useState<string>(
+    formulacion.variedadConEstevia?.gramosEstevia
+      ? String(formulacion.variedadConEstevia.gramosEstevia)
+      : ''
+  );
+  const [loteSteviaSelected, setLoteSteviaSelected] = useState<string>(
+    formulacion.variedadConEstevia?.loteEstevia || 'EST-2026-01'
+  );
+  const [manualStevia, setManualStevia] = useState<boolean>(false);
+  const [horaManualStevia, setHoraManualStevia] = useState<string>(
+    formulacion.variedadConEstevia?.horaAdicion || getCurrentTimeString()
+  );
+
+  // Estado Paso 2: Batido
+  const [manualBatido, setManualBatido] = useState<boolean>(false);
+  const [horaManualInicioBatido, setHoraManualInicioBatido] = useState<string>(
+    batido.horaInicio || getCurrentTimeString()
+  );
+  const [horaManualFinBatido, setHoraManualFinBatido] = useState<string>(
+    batido.horaFin || getCurrentTimeString()
+  );
+
+  // Reloj de batido (5 min sugerido)
   const batidoTimer = useStageCountdown({
-    isRunning: batido.iniciado && !batido.completado,
-    isCompleted: batido.completado,
-    startTimestamp: batidoStartTimestamp,
+    isRunning: Boolean(batido.iniciado && !batido.completado),
+    isCompleted: Boolean(batido.completado),
     targetMinutes: 5,
     completedDurationText: batido.tiempoBatido,
   });
 
-  const masaDisponibleKg = baseFiltradaKg;
-  const masaSinEstevia = Number(formulacion.variedadSinEstevia.masaKg) || 0;
-  const masaConEstevia = Number(formulacion.variedadConEstevia.masaKg) || 0;
-  const masaTotalAsignada = Number((masaSinEstevia + masaConEstevia).toFixed(1));
-  const diferenciaMasa = Number((masaDisponibleKg - masaTotalAsignada).toFixed(1));
-  const balanceCorrecto = Math.abs(diferenciaMasa) < 0.05;
+  const isSteviaConfirmada = Boolean(
+    formulacion.variedadConEstevia?.confirmado ||
+      (formulacion.registrado && formulacion.variedadConEstevia?.gramosEstevia > 0)
+  );
 
+  // --- Handlers Paso 1: Stevia ---
+  const handleConfirmarStevia = () => {
+    const numGramos = Number(cantidadSteviaInput);
+    if (!cantidadSteviaInput || numGramos <= 0) {
+      showToast('⚠️ Ingresa la cantidad de Stevia en gramos.', 'warning');
+      return;
+    }
+    if (!loteSteviaSelected.trim()) {
+      showToast('⚠️ Selecciona el lote de Stevia.', 'warning');
+      return;
+    }
+
+    const timeStr = manualStevia
+      ? formatTimeFromStep1(horaManualStevia)
+      : getCurrentTimeString();
+
+    onChange((prev) => ({
+      ...prev,
+      formulacion: {
+        ...prev.formulacion,
+        tipo: 'con_stevia',
+        llevaStevia: true,
+        registrado: true,
+        horaRegistro: timeStr,
+        variedadConEstevia: {
+          ...prev.formulacion.variedadConEstevia,
+          gramosEstevia: numGramos,
+          loteEstevia: loteSteviaSelected,
+          horaAdicion: timeStr,
+          confirmado: true,
+        },
+      },
+    }));
+
+    setHoraManualStevia(timeStr);
+    showToast(
+      `✓ Adición de Stevia confirmada (${numGramos} g · Lote ${loteSteviaSelected}) a las ${timeStr}.`,
+      'success'
+    );
+  };
+
+  const handleSaveManualSteviaTime = () => {
+    const timeFmt = formatTimeFromStep1(horaManualStevia);
+    onChange((prev) => ({
+      ...prev,
+      formulacion: {
+        ...prev.formulacion,
+        variedadConEstevia: {
+          ...prev.formulacion.variedadConEstevia,
+          horaAdicion: timeFmt,
+        },
+      },
+    }));
+    setManualStevia(false);
+    showToast(`✓ Hora de adición de Stevia actualizada a ${timeFmt}.`, 'success');
+  };
+
+  // --- Handlers Paso 2: Batido ---
   const handleStartBatido = () => {
     const timeStr = getCurrentTimeString();
-    setBatidoStartTimestamp(Date.now());
     onChange((prev) => ({
       ...prev,
       batido: {
@@ -60,8 +149,9 @@ export const BatidoYAdicionesStageGriego: React.FC<
         horaInicio: timeStr,
       },
     }));
+    setHoraManualInicioBatido(timeStr);
     showToast(
-      `⏱ Batido de Griego iniciado a las ${timeStr} (${batido.velocidadRpm} RPM).`,
+      `⏱ Batido suave de Griego iniciado a las ${timeStr} (35 RPM).`,
       'info'
     );
   };
@@ -78,349 +168,389 @@ export const BatidoYAdicionesStageGriego: React.FC<
         tiempoBatido: durStr,
       },
     }));
+    setHoraManualFinBatido(timeStr);
     showToast(
-      `✓ Batido de Griego terminado a las ${timeStr} (${durStr}). Masa brillante y sin grumos.`,
+      `✓ Batido de Griego terminado (${durStr}). Masa homogénea y sedosa lista.`,
       'success'
     );
   };
 
-  const handleConfirmarFormulacion = () => {
-    if (masaConEstevia > 0 && !formulacion.variedadConEstevia.loteEstevia.trim()) {
-      showToast(
-        '⚠️ Anota el lote de Stevia para la parte que va endulzada.',
-        'warning'
-      );
-      return;
-    }
+  const handleSaveManualBatido = () => {
+    const startFmt = formatTimeFromStep1(horaManualInicioBatido);
+    const finFmt = formatTimeFromStep1(horaManualFinBatido);
+    const durStr = computeDurationBetweenTimes(startFmt, finFmt).human;
 
-    if (!balanceCorrecto) {
-      showToast(
-        `⚠️ Ajusta los kilos: la suma (${masaTotalAsignada} kg) debe cuadrar con la masa disponible (${masaDisponibleKg} kg).`,
-        'warning'
-      );
-      return;
-    }
-
-    const timeStr = getCurrentTimeString();
     onChange((prev) => ({
       ...prev,
-      formulacion: {
-        ...prev.formulacion,
-        registrado: true,
-        horaRegistro: timeStr,
+      batido: {
+        ...prev.batido,
+        iniciado: true,
+        completado: true,
+        horaInicio: startFmt,
+        horaFin: finFmt,
+        tiempoBatido: durStr,
+        esManual: true,
       },
     }));
 
-    showToast(
-      `✓ Reparto guardado: ${masaSinEstevia} kg Sin Stevia y ${masaConEstevia} kg Con Stevia.`,
-      'success'
-    );
+    setManualBatido(false);
+    showToast(`✓ Horarios de batido actualizados (${durStr}).`, 'success');
   };
 
-  const isReadyForNext = batido.completado && formulacion.registrado;
+  const isReadyForNext = Boolean(batido.completado && isSteviaConfirmada);
 
   return (
     <div className="flex flex-col w-full p-4 lg:p-6 gap-5 bg-[#fcfaf7] min-h-[calc(100vh-4rem)] pb-14">
+      {/* CABECERA ESTÁNDAR MAESTRA */}
       <StageHeader
         stageNumber={4}
         totalStages={5}
         lineName="Línea de Fermentados · Yogur Griego"
-        title="4. Batido y Reparto (Sin/Con Stevia)"
-        subtitle="Bate suave la masa escurrida (sin agregarle crema ni azúcar) y divídela entre Griego Natural (sin stevia) y Griego con Stevia."
+        title="4. Batido e Insumo Stevia (Yogur Griego)"
+        subtitle="Registro de insumo Stevia y batido a 35 RPM para homogeneizar la masa concentrada de forma unificada."
         standardBadge="NTC-805"
         metrics={[
           {
-            icon: 'scale',
-            label: 'Masa Filtrada',
-            value: `${masaDisponibleKg} kg`,
-            tone: 'amber',
+            icon: 'cookie',
+            label: 'Insumo Stevia',
+            value: isSteviaConfirmada
+              ? `${formulacion.variedadConEstevia.gramosEstevia} g (${formulacion.variedadConEstevia.loteEstevia})`
+              : 'Por Registrar',
+            tone: isSteviaConfirmada ? 'emerald' : 'default',
           },
           {
-            icon: 'verified',
-            label: 'Regla Griego',
-            value: 'Cero Azúcar / Crema',
-            tone: 'emerald',
+            icon: 'rotate_right',
+            label: 'Batido Suave (35 RPM)',
+            value: batido.completado
+              ? 'Completado ✓'
+              : batido.iniciado
+              ? batidoTimer.formattedElapsed
+              : 'Por Iniciar',
+            tone: batido.completado
+              ? 'emerald'
+              : batido.iniciado
+              ? 'amber'
+              : 'default',
           },
         ]}
       />
 
-      {/* PASO 01: BATIDO SUAVE SIN CREMA */}
+      {/* ========================================================================= */}
+      {/* PASO 01: REGISTRO DE INSUMO STEVIA                                        */}
+      {/* ========================================================================= */}
       <Card
         stepBadge="Paso 01"
-        title="Batido Suave de la Masa (Sin Crema)"
-        subtitle="Bate a 35 RPM por unos 5 minutos solo para darle brillo y dejar la masa pareja y sedosa."
-        icon="rotate_right"
-        tone={
-          batido.completado
-            ? 'completed'
-            : batido.iniciado
-              ? 'active'
-              : 'default'
-        }
+        title="Registro de Insumo Stevia"
+        subtitle="Registra el lote y la cantidad exacta de Stevia en polvo a incorporar en la masa concentrada de Yogur Griego."
+        icon="tune"
+        tone={isSteviaConfirmada ? 'completed' : 'active'}
         statusBadge={
-          batido.completado
-            ? { label: `Batido Listo (${batido.horaFin})`, variant: 'success' }
-            : batido.iniciado
-              ? { label: 'Batiendo a 35 RPM', variant: 'warning', pulse: true }
-              : { label: 'Pendiente', variant: 'neutral' }
+          isSteviaConfirmada
+            ? {
+                label: `Stevia Confirmada (${formulacion.variedadConEstevia.gramosEstevia} g) ✓`,
+                variant: 'success',
+              }
+            : { label: 'Pendiente de Registro', variant: 'warning' }
         }
         headerAction={
-          !batido.iniciado ? (
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-[#5d564a] bg-[#f4efe6] px-3 py-1.5 rounded-lg border border-[#e6decb] hover:bg-[#ede5d6] transition-colors">
+              <input
+                type="checkbox"
+                checked={manualStevia}
+                onChange={(e) => setManualStevia(e.target.checked)}
+                className="rounded border-[#cfc4b0] text-[#1e1b18] focus:ring-amber-500 w-4 h-4 cursor-pointer"
+              />
+              <span>Habilitar edición manual</span>
+            </label>
+
             <Button
-              variant="primary"
-              icon="play_arrow"
-              onClick={handleStartBatido}
+              variant={isSteviaConfirmada ? 'secondary' : 'primary'}
+              size="md"
+              icon={isSteviaConfirmada ? 'check_circle' : 'add'}
+              onClick={handleConfirmarStevia}
+              className={
+                isSteviaConfirmada
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 font-bold'
+                  : 'font-bold shadow-sm'
+              }
             >
-              Iniciar Batido Suave
+              {isSteviaConfirmada
+                ? `✓ ¡Ya agregué la stevia! (${formulacion.variedadConEstevia.gramosEstevia} g)`
+                : '¡Ya agregué la stevia!'}
             </Button>
-          ) : (
-            <ConfirmButton
-              confirmed={batido.completado}
-              confirmedLabel={`✓ Batido Terminado (${batido.horaFin})`}
-              unconfirmedLabel="Confirmar: Ya Quedó Cremoso · Terminar Batido"
-              onConfirm={handleEndBatido}
-            />
-          )
+          </div>
         }
       >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Selector de Lote de Stevia */}
+          <SelectField
+            label="Lote de Stevia"
+            icon="label"
+            options={LOTES_STEVIA_OPTIONS}
+            value={loteSteviaSelected}
+            onChange={(e) => setLoteSteviaSelected(e.target.value)}
+            disabled={isSteviaConfirmada && !manualStevia}
+            hint="Selecciona el lote de stevia recibido de bodega"
+          />
+
+          {/* Campo Limpio de Cantidad en Gramos */}
+          <InputField
+            label="Cantidad de Stevia"
+            type="number"
+            min="0.1"
+            step="0.1"
+            unit="gramos"
+            icon="scale"
+            placeholder="Ej: 15"
+            showZero={false}
+            value={cantidadSteviaInput}
+            onChange={(e) => setCantidadSteviaInput(e.target.value)}
+            disabled={isSteviaConfirmada && !manualStevia}
+            hint="Dosis estándar recomendada: 12 a 18 g"
+          />
+
+          {/* Hora de Adición / Selector Manual */}
+          {!manualStevia ? (
+            <div className="p-3.5 bg-[#fcfaf7] rounded-xl border border-[#e6decb] flex flex-col justify-between">
+              <span className="text-[11px] uppercase font-bold text-[#5d564a]">
+                Hora de Adición
+              </span>
+              <div className="text-xl font-black font-mono text-[#1e1b18] mt-1">
+                {formulacion.variedadConEstevia?.horaAdicion || '--:--:--'}
+              </div>
+              <span className="text-[11px] text-[#7a7164] mt-1 block">
+                {isSteviaConfirmada
+                  ? 'Registrada al confirmar adición'
+                  : 'Pendiente de registrar'}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5 justify-between">
+              <PopoverTimePicker
+                label="Hora de Adición Manual"
+                icon="schedule"
+                value={horaManualStevia}
+                onChange={setHoraManualStevia}
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                icon="save"
+                onClick={handleSaveManualSteviaTime}
+                className="w-full text-xs font-semibold"
+              >
+                Guardar Hora
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* ========================================================================= */}
+      {/* PASO 02: PROCESO DE BATIDO SUAVE                                          */}
+      {/* ========================================================================= */}
+      <Card
+        stepBadge="Paso 02"
+        title="Proceso de Batido Suave (35 RPM)"
+        subtitle="Homogeniza la masa concentrada con la stevia a 35 RPM durante 5 minutos para lograr una textura sedosa sin romper el coágulo."
+        icon="rotate_right"
+        tone={batido.completado ? 'completed' : batido.iniciado ? 'active' : 'default'}
+        statusBadge={
+          batido.completado
+            ? { label: `Listo (${batido.horaFin}) ✓`, variant: 'success' }
+            : batido.iniciado
+            ? { label: 'Batiendo a 35 RPM...', variant: 'warning', pulse: true }
+            : { label: 'Pendiente', variant: 'neutral' }
+        }
+        headerAction={
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-[#5d564a] bg-[#f4efe6] px-3 py-1.5 rounded-lg border border-[#e6decb] hover:bg-[#ede5d6] transition-colors">
+              <input
+                type="checkbox"
+                checked={manualBatido}
+                onChange={(e) => setManualBatido(e.target.checked)}
+                className="rounded border-[#cfc4b0] text-[#1e1b18] focus:ring-amber-500 w-4 h-4 cursor-pointer"
+              />
+              <span>Habilitar edición manual</span>
+            </label>
+
+            {!batido.iniciado ? (
+              <Button
+                variant="primary"
+                size="md"
+                icon="play_arrow"
+                onClick={handleStartBatido}
+                className="font-bold shadow-sm"
+              >
+                Iniciar Batido Suave (5 min)
+              </Button>
+            ) : !batido.completado ? (
+              <Button
+                variant="primary"
+                size="md"
+                icon="check_circle"
+                onClick={handleEndBatido}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-sm"
+              >
+                Terminó Batido
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                size="md"
+                icon="refresh"
+                onClick={handleStartBatido}
+                className="font-bold"
+              >
+                Reiniciar Batido
+              </Button>
+            )}
+          </div>
+        }
+      >
+        {/* Banner del cronómetro de batido */}
         {(batido.iniciado || batido.completado) && (
           <TimerBanner
-            label="Tiempo de Batido del Griego"
-            sublabel="Tiempo sugerido: 5 minutos a 35 RPM (sin crema)"
-            formattedTime={batidoTimer.formattedElapsed}
+            label="Cronómetro de Batido de Yogur Griego"
+            sublabel="Tiempo sugerido: 5 minutos a 35 RPM sin adición de crema"
+            formattedTime={
+              batido.completado
+                ? batido.tiempoBatido || '5 min'
+                : batidoTimer.formattedElapsed
+            }
             targetLabel="5 min"
             progressPercent={batidoTimer.progressPercent}
-            isRunning={batido.iniciado && !batido.completado}
-            isCompleted={batido.completado}
+            isRunning={Boolean(batido.iniciado && !batido.completado)}
+            isCompleted={Boolean(batido.completado)}
             isOvertime={batidoTimer.isOvertime}
             className="mb-4"
           />
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-3.5 bg-[#fcfaf7] rounded-xl border border-[#e6decb]">
-            <span className="text-[11px] uppercase font-bold text-[#5d564a] block">
-              Velocidad de Batido
-            </span>
-            <span className="text-xl font-black font-mono text-[#1e1b18] mt-1 block">
-              {batido.velocidadRpm} RPM
-            </span>
-            <span className="text-[11px] text-[#7a7164] mt-1 block">
-              Batido suave para no soltar suero
-            </span>
+        {!manualBatido ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl bg-white border border-[#e6decb] flex flex-col justify-between">
+              <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                VELOCIDAD PROGRAMADA
+              </span>
+              <span className="text-xl font-mono font-black text-gray-900 mt-1 block">
+                35 RPM
+              </span>
+              <span className="text-[11px] text-gray-500 mt-1 block">
+                Batido lento para no liberar suero
+              </span>
+            </div>
+
+            <div className="p-4 rounded-xl bg-white border border-[#e6decb] flex flex-col justify-between">
+              <span className="text-[10px] uppercase font-bold text-gray-500 block">
+                INICIO / FIN DE BATIDO
+              </span>
+              <span className="text-base font-mono font-bold text-gray-900 mt-1 block">
+                {batido.horaInicio || '--:--'} → {batido.horaFin || '--:--'}
+              </span>
+              <span className="text-[11px] text-gray-500 mt-1 block">
+                Duración: {batido.tiempoBatido || '--'}
+              </span>
+            </div>
+
+            <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 flex flex-col justify-between">
+              <span className="text-[10px] uppercase font-bold text-emerald-900 block">
+                CONSISTENCIA DE MASA
+              </span>
+              <span className="text-base font-bold text-emerald-950 mt-1 block">
+                Cremosa, densa y sedosa
+              </span>
+              <span className="text-[11px] text-emerald-700 mt-1 block">
+                100% masa de filtrado sin espesantes
+              </span>
+            </div>
           </div>
-
-          <div className="p-3.5 bg-[#fcfaf7] rounded-xl border border-[#e6decb]">
-            <span className="text-[11px] uppercase font-bold text-[#5d564a] block">
-              Tiempo de Batido
-            </span>
-            <span className="text-xl font-black font-mono text-[#1e1b18] mt-1 block">
-              {batido.completado
-                ? batido.tiempoBatido || '5 min'
-                : batido.iniciado
-                  ? batidoTimer.formattedElapsed
-                  : '5 min'}
-            </span>
-            <span className="text-[11px] text-[#7a7164] mt-1 block">
-              Inicio: {batido.horaInicio || '--:--'} · Fin:{' '}
-              {batido.horaFin || '--:--'}
-            </span>
-          </div>
-
-          <div className="p-3.5 bg-[#fcfaf7] rounded-xl border border-[#e6decb]">
-            <span className="text-[11px] uppercase font-bold text-[#5d564a] block">
-              Textura del Griego
-            </span>
-            <span className="text-sm font-black text-emerald-800 mt-1.5 block">
-              Espeso, brillante y sin grumos
-            </span>
-            <span className="text-[11px] text-[#7a7164] mt-1 block">
-              100% leche escurrida en lienzos
-            </span>
-          </div>
-        </div>
-      </Card>
-
-      {/* PASO 02: REPARTO ENTRE SIN STEVIA Y CON STEVIA */}
-      <Card
-        stepBadge="Paso 02"
-        title="Reparto por Variedad: Griego Sin Stevia vs. Con Stevia"
-        subtitle="Reparte los kilos de masa filtrada entre las dos presentaciones de Griego."
-        icon="tune"
-        tone={formulacion.registrado ? 'completed' : 'default'}
-        statusBadge={
-          balanceCorrecto
-            ? {
-                label: `Cuadrado: ${masaTotalAsignada} / ${masaDisponibleKg} kg`,
-                variant: 'success',
-              }
-            : {
-                label:
-                  diferenciaMasa > 0
-                    ? `Faltan ${diferenciaMasa} kg por repartir`
-                    : `Te pasaste por ${Math.abs(diferenciaMasa)} kg`,
-                variant: 'warning',
-              }
-        }
-        headerAction={
-          <ConfirmButton
-            confirmed={formulacion.registrado}
-            disabled={!batido.completado}
-            confirmedLabel={`✓ Reparto Guardado (${formulacion.horaRegistro})`}
-            unconfirmedLabel="Confirmar Reparto de Masa"
-            icon="save"
-            onConfirm={handleConfirmarFormulacion}
-          />
-        }
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* VARIEDAD 1: GRIEGO SIN STEVIA */}
-          <div className="p-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 flex flex-col justify-between gap-4">
-            <div>
-              <div className="flex items-center justify-between mb-3 pb-2 border-b border-emerald-200/80">
-                <h3 className="text-base font-black text-emerald-950">
-                  1. Griego Sin Stevia (Natural)
-                </h3>
-                <Badge variant="success">100% Puro</Badge>
-              </div>
-              <p className="text-xs text-[#434655] mb-4">
-                Sabor natural neutro sin ningún endulzante. Se envasa en tarros de 1 L (1000 g) y 500 ml (500 g).
-              </p>
-
-              <InputField
-                label="Kilos de Masa Sin Stevia"
-                type="number"
-                step="0.5"
-                min="0"
-                unit="kg"
-                value={formulacion.variedadSinEstevia.masaKg}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  onChange((prev) => ({
-                    ...prev,
-                    formulacion: {
-                      ...prev.formulacion,
-                      variedadSinEstevia: {
-                        ...prev.formulacion.variedadSinEstevia,
-                        masaKg: val,
-                      },
-                    },
-                  }));
-                }}
+        ) : (
+          <div className="p-4 rounded-xl bg-amber-50/90 border-2 border-amber-300 flex flex-col gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+              <PopoverTimePicker
+                label="Hora de Inicio de Batido"
+                icon="schedule"
+                value={horaManualInicioBatido}
+                onChange={setHoraManualInicioBatido}
+              />
+              <PopoverTimePicker
+                label="Hora de Fin de Batido"
+                icon="schedule"
+                value={horaManualFinBatido}
+                onChange={setHoraManualFinBatido}
               />
             </div>
-
-            <div className="text-xs text-emerald-900 font-semibold">
-              Envases autorizados: Tarro 1000 g y Tarro 500 g
+            <div className="flex justify-end pt-1">
+              <Button
+                variant="primary"
+                size="md"
+                icon="save"
+                onClick={handleSaveManualBatido}
+              >
+                Guardar Horarios de Batido
+              </Button>
             </div>
           </div>
-
-          {/* VARIEDAD 2: GRIEGO CON STEVIA */}
-          <div className="p-5 rounded-2xl border-2 border-amber-200 bg-amber-50/40 flex flex-col justify-between gap-4">
-            <div>
-              <div className="flex items-center justify-between mb-3 pb-2 border-b border-amber-200/80">
-                <h3 className="text-base font-black text-amber-950">
-                  2. Griego Con Stevia
-                </h3>
-                <Badge variant="warning">Endulzado con Stevia</Badge>
-              </div>
-              <p className="text-xs text-[#434655] mb-4">
-                Endulzado únicamente con stevia. Se envasa en tarros de 1000 g, 500 g y vasitos de 120 g.
-              </p>
-
-              <div className="space-y-3">
-                <InputField
-                  label="Kilos de Masa Con Stevia"
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  unit="kg"
-                  value={formulacion.variedadConEstevia.masaKg}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    onChange((prev) => ({
-                      ...prev,
-                      formulacion: {
-                        ...prev.formulacion,
-                        variedadConEstevia: {
-                          ...prev.formulacion.variedadConEstevia,
-                          masaKg: val,
-                        },
-                      },
-                    }));
-                  }}
-                />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <InputField
-                    label="Cantidad de Stevia"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    unit="g"
-                    value={formulacion.variedadConEstevia.gramosEstevia ?? 0}
-                    onChange={(e) => {
-                      const val =
-                        e.target.value === '' ? 0 : Number(e.target.value);
-                      onChange((prev) => ({
-                        ...prev,
-                        formulacion: {
-                          ...prev.formulacion,
-                          variedadConEstevia: {
-                            ...prev.formulacion.variedadConEstevia,
-                            gramosEstevia: val,
-                          },
-                        },
-                      }));
-                    }}
-                  />
-
-                  <InputField
-                    label="Lote de Stevia"
-                    type="text"
-                    value={formulacion.variedadConEstevia.loteEstevia}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      onChange((prev) => ({
-                        ...prev,
-                        formulacion: {
-                          ...prev.formulacion,
-                          variedadConEstevia: {
-                            ...prev.formulacion.variedadConEstevia,
-                            loteEstevia: val,
-                          },
-                        },
-                      }));
-                    }}
-                    placeholder="Ej: EST-2026-X"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="text-xs text-amber-900 font-semibold">
-              Envases autorizados: Tarro 1000 g, Tarro 500 g y Vasito 120 g
-            </div>
-          </div>
-        </div>
+        )}
       </Card>
 
-      {/* AVANZAR A ETAPA 5 */}
+      {/* ========================================================================= */}
+      {/* TARJETA INFERIOR: ACCIÓN DE CIERRE Y AVANCE A ENVASADO                     */}
+      {/* ========================================================================= */}
       <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#e6decb] shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="text-xs sm:text-sm text-[#434655]">
-          Con el Griego batido y repartido, pasa a{' '}
-          <strong className="text-[#1e1b18]">5. Envasado y Almacenamiento Final</strong>.
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              isReadyForNext
+                ? 'bg-emerald-100 text-emerald-900'
+                : 'bg-amber-100 text-amber-900'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[24px]">inventory_2</span>
+          </div>
+          <div className="text-xs sm:text-sm text-[#434655]">
+            <p className="font-bold text-[#1e1b18]">
+              {isReadyForNext
+                ? '✓ Batido e Insumo completados: Listo para Envasado'
+                : 'Paso previo pendiente'}
+            </p>
+            <p>
+              {isReadyForNext
+                ? 'La masa concentrada está homogenizada con la stevia. Pulsa a la derecha para avanzar a '
+                : 'Registra la adición de Stevia y completa el batido suave para habilitar '}
+              <strong className="text-emerald-900 font-semibold">
+                5. Envasar y Guardar
+              </strong>
+              .
+            </p>
+          </div>
         </div>
-        <Button
-          variant="primary"
-          size="lg"
-          iconRight="arrow_forward"
-          disabled={!isReadyForNext}
-          onClick={onNextStage}
-          className="w-full sm:w-auto"
-        >
-          Ir a 5. Envasado y Rendimiento
-        </Button>
+
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          {isReadyForNext ? (
+            <Button
+              variant="primary"
+              size="lg"
+              icon="inventory_2"
+              iconRight="arrow_forward"
+              onClick={onNextStage}
+              className="w-full sm:w-auto font-bold shadow-md bg-emerald-700 hover:bg-emerald-800 text-white cursor-pointer"
+            >
+              Avanzar a 5. Envasar y Guardar
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              size="lg"
+              disabled
+              className="w-full sm:w-auto font-bold opacity-60 cursor-not-allowed"
+            >
+              Completa el Insumo y Batido
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

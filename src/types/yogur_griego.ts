@@ -98,6 +98,7 @@ export interface MaduracionYFiltradoYogurGriegoState {
     duracionMinimaDias: number; // 1 día (24 h)
     duracionMaximaDias: number; // 2 días (48 h)
     cumplio24h: boolean;
+    esManual?: boolean;
   };
 
   // ② Filtrado en telas: cronómetro automático de 2 días (48 h)
@@ -131,6 +132,8 @@ export interface BatidoYAdicionesYogurGriegoState {
 
   // ⑤ Formulación por variedad: SOLO "Griego sin estevia" y "Griego con estevia"
   formulacion: {
+    llevaStevia?: boolean;
+    tipo?: 'sin_stevia' | 'con_stevia' | 'ambas';
     variedadSinEstevia: {
       masaKg: number; // Masa en kg
       nota: string;
@@ -139,6 +142,8 @@ export interface BatidoYAdicionesYogurGriegoState {
       masaKg: number; // Masa en kg
       gramosEstevia: number; // Cantidad de estevia en gramos
       loteEstevia: string;
+      horaAdicion?: string | null;
+      confirmado?: boolean;
     };
     registrado: boolean;
     horaRegistro: string | null;
@@ -148,12 +153,19 @@ export interface BatidoYAdicionesYogurGriegoState {
 export interface FormatosGriegoSinEstevia {
   tarro1L: number;
   tarro500ml: number;
+  vasito120ml?: number;
+  tarrina1000g?: number;
+  tarrina500g?: number;
+  tarrina120g?: number;
 }
 
 export interface FormatosGriegoConEstevia {
   tarro1L: number;
   tarro500ml: number;
   vasito120ml: number; // SOLO para con estevia
+  tarrina1000g?: number;
+  tarrina500g?: number;
+  tarrina120g?: number;
 }
 
 export interface EnvasadoYAlmacenamientoYogurGriegoState {
@@ -161,6 +173,8 @@ export interface EnvasadoYAlmacenamientoYogurGriegoState {
   fechaProduccion: string;
   fechaVencimiento: string; // +30 días
   temperaturaEnvasado: number; // 5.0 °C
+  conteoConfirmado?: boolean;
+  esManualConteo?: boolean;
 
   // 5. Envasado del Griego:
   // - Tarro 1 L: disponible para "sin estevia" Y "con estevia".
@@ -226,9 +240,9 @@ export const INITIAL_YOGUR_GRIEGO_BATCH: YogurGriegoBatchData = {
   ],
   status: 'NOMINAL',
   stageStatuses: {
-    acidificar: 'en_proceso',
-    'calentar-y-cuajar': 'pendiente',
-    desuerar: 'pendiente',
+    acidificar: 'completada',
+    'calentar-y-cuajar': 'completada',
+    desuerar: 'en_proceso',
     hilar: 'pendiente',
     moldeo: 'pendiente',
   },
@@ -243,7 +257,7 @@ export const INITIAL_YOGUR_GRIEGO_BATCH: YogurGriegoBatchData = {
 
   pasteurizacion: {
     loteYogurSinAzucar: '',
-    litrosLeche: 100,
+    litrosLeche: 0,
     loteLeche: 'LECHE-GRI-2026-01',
     acidezDornic: 16.0,
     phRecepcion: 6.65,

@@ -8,6 +8,9 @@ export interface PasteurizacionKumisState {
 
   // Interruptor: ¿Este lote lleva azúcar? (Sí/No)
   llevaAzucar: boolean;
+  loteAzucar?: string;
+  cantidadAzucarKg?: number;
+  loteAzucarPastur?: string;
   azucar: {
     adicionado: boolean;
     horaAdicion: string | null;
@@ -44,14 +47,15 @@ export interface PasteurizacionKumisState {
     duracionReal: string | null;
   };
 
-  // Enfriamiento a 45.0 °C (cronómetro automático tras sostenimiento)
+  // Enfriamiento a 35.0 °C (cronómetro automático tras sostenimiento)
   enfriamiento: {
     enfriamientoIniciado: boolean;
-    enfriamientoCompletado: boolean; // "Llegó a 45 °C"
+    enfriamientoCompletado: boolean; // "Llegó a 35 °C"
     horaInicio: string | null;
+    horaInicioEnfriamiento?: string | null;
     horaFinEnfriamiento: string | null;
     timestampInicioEnfriamiento: number | null;
-    temperaturaFinal: number; // 45.0 °C
+    temperaturaFinal: number; // 35.0 °C
     tiempoEnfriamiento: string | null;
     esManual: boolean;
     trasladoCantinasIniciado?: boolean; // compat
@@ -335,7 +339,7 @@ export const INITIAL_KUMIS_BATCH: KumisBatchData = {
     moldeo: 'pendiente',
   },
   pasteurizacion: {
-    litrosLeche: 100,
+    litrosLeche: 0,
     loteLeche: 'LE-2026-KUM-01',
     loteCultivoLacticoPastur: 'CUL-2026-10B',
     acidezDornic: 16.0,
@@ -345,7 +349,7 @@ export const INITIAL_KUMIS_BATCH: KumisBatchData = {
     azucar: {
       adicionado: false,
       horaAdicion: null,
-      cantidadKg: 8.0, // (100 / 40) * 3.2 = 8.0 kg
+      cantidadKg: 0,
       loteAzucar: 'AZU-2026-11',
       esManual: false,
     },

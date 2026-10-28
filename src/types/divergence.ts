@@ -22,7 +22,7 @@ export interface ChildBatchReference {
   llevaAzucar: boolean;
   targetInoculationTempRange: string;
   createdAt: string;
-  status: 'en_proceso' | 'completado';
+  status: 'pendiente' | 'en_proceso' | 'completado';
 }
 
 export interface ParentMilkBatch {

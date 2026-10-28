@@ -42,7 +42,7 @@ export const INITIAL_PRODUCTS: ProductDefinition[] = [
   // 2. PRODUCTOS DE FERMENTACIÓN
   {
     id: 'prod-yogur',
-    name: 'Yogur Natural / Dulce / Kumis / Griego',
+    name: 'Yogur Entero',
     code: 'YOG-101',
     lineType: 'fermentacion',
     description: 'Leche entera pasteurizada e inoculada con cultivos lácticos específicos. Incluye tratamiento térmico a 85-90 °C, enfriamiento a 45 °C, inoculación (8 h), maduración en frío (12 h), batido con adición de saborizante natural/azúcar y envasado.',

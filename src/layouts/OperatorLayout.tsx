@@ -54,6 +54,7 @@ export const OperatorLayout: React.FC<OperatorLayoutProps> = ({
         productName={batch.productName}
         productId={batch.productId}
         lotesLeche={lotesLeche}
+        llevaAzucar={(batch as any).pasteurizacion?.llevaAzucar}
         stageStatuses={stageStatuses}
         mobileOpen={mobileOpen}
         onCloseMobile={onCloseMobile}

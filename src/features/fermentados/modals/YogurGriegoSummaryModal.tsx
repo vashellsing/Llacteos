@@ -71,29 +71,50 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
   } = batch;
 
   // 1. Leche inicial
-  const lecheInicialL = pasteurizacion.litrosLeche || 100;
+  const lecheInicialL = pasteurizacion.litrosLeche ?? 0;
 
   // 2. Suero eliminado (estimado)
   const sueroEliminadoL =
-    maduracionYFiltrado.filtradoTelas.sueroEliminadoEstimadoLitros ||
+    maduracionYFiltrado.filtradoTelas.sueroEliminadoEstimadoLitros ??
     Number((lecheInicialL * 0.65).toFixed(1));
 
   // 3. Masa filtrada
   const masaFiltradaKg =
-    maduracionYFiltrado.filtradoTelas.masaFiltradaKg ||
+    maduracionYFiltrado.filtradoTelas.masaFiltradaKg ??
     Number((lecheInicialL * 0.35).toFixed(1));
 
   // 4. Masa envasada por variedad
-  // Griego sin estevia: Tarro 1L + Tarro 500ml
-  const sinEst1L = envasado.formatosSinEstevia?.tarro1L || 0;
-  const sinEst500ml = envasado.formatosSinEstevia?.tarro500ml || 0;
-  const masaEnvasadaSinEstevia = Number((sinEst1L * 1.0 + sinEst500ml * 0.5).toFixed(2));
-  const undsSinEstevia = sinEst1L + sinEst500ml;
+  // Griego sin estevia: Tarro 1000g + Tarro 500g + Vasito 120g
+  const sinEst1L =
+    envasado.formatosSinEstevia?.tarro1L ||
+    envasado.formatosSinEstevia?.tarrina1000g ||
+    0;
+  const sinEst500ml =
+    envasado.formatosSinEstevia?.tarro500ml ||
+    envasado.formatosSinEstevia?.tarrina500g ||
+    0;
+  const sinEst120ml =
+    envasado.formatosSinEstevia?.vasito120ml ||
+    envasado.formatosSinEstevia?.tarrina120g ||
+    0;
+  const masaEnvasadaSinEstevia = Number(
+    (sinEst1L * 1.0 + sinEst500ml * 0.5 + sinEst120ml * 0.12).toFixed(2)
+  );
+  const undsSinEstevia = sinEst1L + sinEst500ml + sinEst120ml;
 
-  // Griego con estevia: Tarro 1L + Tarro 500ml + Vasito 120ml
-  const conEst1L = envasado.formatosConEstevia?.tarro1L || 0;
-  const conEst500ml = envasado.formatosConEstevia?.tarro500ml || 0;
-  const conEst120ml = envasado.formatosConEstevia?.vasito120ml || 0;
+  // Griego con estevia: Tarro 1000g + Tarro 500g + Vasito 120g
+  const conEst1L =
+    envasado.formatosConEstevia?.tarro1L ||
+    envasado.formatosConEstevia?.tarrina1000g ||
+    0;
+  const conEst500ml =
+    envasado.formatosConEstevia?.tarro500ml ||
+    envasado.formatosConEstevia?.tarrina500g ||
+    0;
+  const conEst120ml =
+    envasado.formatosConEstevia?.vasito120ml ||
+    envasado.formatosConEstevia?.tarrina120g ||
+    0;
   const masaEnvasadaConEstevia = Number(
     (conEst1L * 1.0 + conEst500ml * 0.5 + conEst120ml * 0.12).toFixed(2)
   );
@@ -102,9 +123,16 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
   const masaTotalEnvasadaKg = Number((masaEnvasadaSinEstevia + masaEnvasadaConEstevia).toFixed(2));
   const totalUnidades = undsSinEstevia + undsConEstevia;
 
-  // 5. Rendimiento lácteo
+  // 5. Rendimiento lácteo sobre volumen de leche desviada
   const rendimientoLacteoPct =
     lecheInicialL > 0 ? Number(((masaTotalEnvasadaKg / lecheInicialL) * 100).toFixed(1)) : 0;
+  const rendimientoMasaPct =
+    masaFiltradaKg > 0 ? Number(((masaTotalEnvasadaKg / masaFiltradaKg) * 100).toFixed(1)) : 0;
+
+  // Stevia en Griego (si aplica)
+  const loteEsteviaGriego = batidoYAdiciones.formulacion?.variedadConEstevia?.loteEstevia || '';
+  const gramosEsteviaGriego = batidoYAdiciones.formulacion?.variedadConEstevia?.gramosEstevia || 0;
+  const hasEsteviaGriego = Boolean(loteEsteviaGriego || gramosEsteviaGriego > 0 || undsConEstevia > 0);
 
   // Operarios handlers
   const handleAddOperator = (nameToAdd: string) => {
@@ -251,10 +279,10 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
 
               {/* REGLA 6: Las 5 Métricas Obligatorias */}
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
-                {/* 1. Leche Inicial */}
+                {/* 1. Leche Inicial Desviada */}
                 <div className="p-4 bg-white rounded-2xl border border-blue-200 shadow-xs">
                   <span className="text-[10px] uppercase font-bold text-blue-700 block">
-                    1. Leche Inicial
+                    1. Leche Base Desviada
                   </span>
                   <span className="text-2xl font-black text-blue-950 mt-1 block">
                     {lecheInicialL} L
@@ -277,7 +305,7 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
                   </span>
                 </div>
 
-                {/* 3. Masa Filtrada */}
+                {/* 3. Masa Concentrada Escurrida */}
                 <div className="p-4 bg-white rounded-2xl border border-purple-200 shadow-xs">
                   <span className="text-[10px] uppercase font-bold text-purple-700 block">
                     3. Masa Filtrada
@@ -285,8 +313,8 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
                   <span className="text-2xl font-black text-purple-950 mt-1 block">
                     {masaFiltradaKg} kg
                   </span>
-                  <span className="text-[10px] text-gray-500 block mt-0.5">
-                    Concentrado colado
+                  <span className="text-[10px] text-purple-800 font-bold block mt-0.5">
+                    Base tras escurrido en telas
                   </span>
                 </div>
 
@@ -312,7 +340,108 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
                     {rendimientoLacteoPct}%
                   </span>
                   <span className="text-[10px] text-emerald-700 block mt-0.5">
-                    Rendimiento Lácteo
+                    s/ Leche ({rendimientoMasaPct}% s/ Masa)
+                  </span>
+                </div>
+              </div>
+
+              {/* SECCIÓN: TRAZABILIDAD DE MATERIAS PRIMAS E INSUMOS (GRIEGO) */}
+              <div className="p-5 rounded-2xl bg-[#fcfaf7] border border-[#e6decb] flex flex-col gap-3">
+                <div className="flex items-center justify-between pb-2 border-b border-[#e6decb]">
+                  <span className="text-xs font-black uppercase tracking-wider text-gray-700 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-cyan-600"></span>
+                    Trazabilidad de Materias Primas e Insumos (Yogur Griego)
+                  </span>
+                  <span className="text-[10px] font-mono text-gray-500">Kardex Exclusivo Griego</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Tarjeta 1: Lote Leche Entera */}
+                  <div className="p-3.5 rounded-xl bg-white border-2 border-blue-300 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <span className="text-[9px] font-bold text-blue-700 uppercase block">
+                        Lote Leche Entera (Base)
+                      </span>
+                      <strong className="text-sm font-mono font-black text-blue-950 block mt-0.5">
+                        {pasteurizacion.loteLeche || 'LE-2026-YOG-01'}
+                      </strong>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-blue-100 flex items-center justify-between text-[10px]">
+                      <span className="text-gray-500">Volumen Desviado:</span>
+                      <span className="font-bold text-blue-900">{lecheInicialL} L</span>
+                    </div>
+                    <span className="text-[9px] text-emerald-700 font-semibold mt-1">
+                      ✓ Base extraída para Griego
+                    </span>
+                  </div>
+
+                  {/* Tarjeta 2: Lote Cultivo Láctico */}
+                  <div className="p-3.5 rounded-xl bg-white border-2 border-emerald-300 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <span className="text-[9px] font-bold text-emerald-700 uppercase block">
+                        Lote Cultivo Láctico
+                      </span>
+                      <strong className="text-sm font-mono font-black text-emerald-950 block mt-0.5 truncate">
+                        {inoculacion.loteCultivo || 'CULT-PROB-2026-04'}
+                      </strong>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-emerald-100 flex items-center justify-between text-[10px]">
+                      <span className="text-gray-500">Dosis DVI:</span>
+                      <span className="font-bold text-emerald-900">{inoculacion.cantidadCultivoGramos || 2.5} g</span>
+                    </div>
+                    <span className="text-[9px] text-emerald-700 font-semibold mt-1">
+                      ✓ Inoculado e incubado a 45 °C
+                    </span>
+                  </div>
+
+                  {/* Tarjeta 3: Lote Stevia (si aplica) */}
+                  <div
+                    className={`p-3.5 rounded-xl border-2 flex flex-col justify-between shadow-2xs ${
+                      hasEsteviaGriego
+                        ? 'bg-white border-amber-300'
+                        : 'bg-gray-50/80 border-gray-200 opacity-60'
+                    }`}
+                  >
+                    <div>
+                      <span
+                        className={`text-[9px] font-bold uppercase block ${
+                          hasEsteviaGriego ? 'text-amber-700' : 'text-gray-400'
+                        }`}
+                      >
+                        Lote Stevia (Si Aplica)
+                      </span>
+                      <strong
+                        className={`text-sm font-mono font-black block mt-0.5 truncate ${
+                          hasEsteviaGriego ? 'text-amber-950' : 'text-gray-400'
+                        }`}
+                      >
+                        {hasEsteviaGriego ? (loteEsteviaGriego || 'LOTE-STV-GRIEGO') : 'N/A - 100% Natural Sin Endulzar'}
+                      </strong>
+                    </div>
+                    <div
+                      className={`mt-2 pt-2 border-t flex items-center justify-between text-[10px] ${
+                        hasEsteviaGriego ? 'border-amber-100' : 'border-gray-200'
+                      }`}
+                    >
+                      <span className="text-gray-500">Adición:</span>
+                      <span className={`font-bold ${hasEsteviaGriego ? 'text-amber-900' : 'text-gray-400'}`}>
+                        {hasEsteviaGriego ? `${gramosEsteviaGriego} g` : '0 g'}
+                      </span>
+                    </div>
+                    <span
+                      className={`text-[9px] font-semibold mt-1 ${
+                        hasEsteviaGriego ? 'text-amber-700' : 'text-gray-400'
+                      }`}
+                    >
+                      {hasEsteviaGriego ? '✓ Endulzado en variedad con Stevia' : 'Exento de azúcar y endulzantes'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-1 p-2.5 rounded-xl bg-cyan-50/50 border border-cyan-200 text-[11px] text-cyan-950 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-cyan-700 text-[16px]">verified</span>
+                  <span>
+                    <strong>Identidad Yogur Griego (NTC-805):</strong> Proceso puro mediante filtración en lienzos. Exento de azúcar industrial y saborizantes artificiales.
                   </span>
                 </div>
               </div>
@@ -338,14 +467,18 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
                     <p className="text-xs text-gray-600 mb-3">
                       Total unidades: <strong className="text-gray-900">{undsSinEstevia}</strong>
                     </p>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="grid grid-cols-3 gap-2 text-xs">
                       <div className="p-2 bg-white rounded-xl border border-blue-100">
-                        <span className="text-gray-500 block text-[10px]">Tarro 1000 g:</span>
-                        <span className="font-bold text-blue-900">{sinEst1L} und ({sinEst1L * 1.0} kg)</span>
+                        <span className="text-gray-500 block text-[10px]">Tarrina 1000 g:</span>
+                        <span className="font-bold text-blue-900">{sinEst1L} und</span>
                       </div>
                       <div className="p-2 bg-white rounded-xl border border-blue-100">
-                        <span className="text-gray-500 block text-[10px]">Tarro 500 g:</span>
-                        <span className="font-bold text-blue-900">{sinEst500ml} und ({sinEst500ml * 0.5} kg)</span>
+                        <span className="text-gray-500 block text-[10px]">Tarrina 500 g:</span>
+                        <span className="font-bold text-blue-900">{sinEst500ml} und</span>
+                      </div>
+                      <div className="p-2 bg-white rounded-xl border border-blue-100">
+                        <span className="text-gray-500 block text-[10px]">Tarrina 120 g:</span>
+                        <span className="font-bold text-blue-900">{sinEst120ml} und</span>
                       </div>
                     </div>
                   </div>

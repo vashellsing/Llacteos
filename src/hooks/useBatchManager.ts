@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BatchData,
   ChildBatchReference,
@@ -20,7 +20,12 @@ import {
   createInitialPeraBatch,
   createInitialPremiumBatch,
 } from '../data/initialBatches';
-import { formatSecondsToHMS, getCurrentTimeString } from '../utils/timer';
+import {
+  computeDurationBetweenTimes,
+  formatSecondsToHMS,
+  getCurrentTimeString,
+  timeStringToTimestampToday,
+} from '../utils/timer';
 import { useIndependentBatchTimer } from './useProcessTimer';
 
 export const STAGE_ORDER: StageId[] = [
@@ -66,7 +71,7 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
     'prod-queso-7-cueros': 'acidificar',
     'prod-yogur': 'acidificar',
     'prod-kumis': 'acidificar',
-    'prod-yogur-griego': 'acidificar',
+    'prod-yogur-griego': 'desuerar',
   });
 
   const currentStage: StageId = stagesByProduct[activeProductId] || 'acidificar';
@@ -115,11 +120,11 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
         variant: 'kumis',
         productId: 'prod-kumis',
         productName: 'Kumis Tradicional',
-        allocatedLiters: INITIAL_KUMIS_BATCH.pasteurizacion.litrosLeche,
+        allocatedLiters: 0,
         llevaAzucar: true,
         targetInoculationTempRange: '30 – 35 °C',
         createdAt: '08:00 AM',
-        status: 'en_proceso',
+        status: 'pendiente',
       },
       {
         id: INITIAL_YOGUR_GRIEGO_BATCH.id,
@@ -127,11 +132,11 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
         variant: 'yogur_griego',
         productId: 'prod-yogur-griego',
         productName: 'Yogur Griego',
-        allocatedLiters: INITIAL_YOGUR_GRIEGO_BATCH.pasteurizacion.litrosLeche,
+        allocatedLiters: 0,
         llevaAzucar: false,
         targetInoculationTempRange: '42 – 45 °C',
         createdAt: '08:00 AM',
-        status: 'en_proceso',
+        status: 'pendiente',
       },
     ],
   }));
@@ -470,6 +475,612 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
     ]
   );
 
+  // 3. EXTRAER LOTE HIJO DE KUMIS DESDE YOGUR CON AZÚCAR (POST-RETENCIÓN)
+  const handleExtractKumisChildBatch = useCallback(
+    (litrosKumis: number) => {
+      const timeStr = getCurrentTimeString();
+      const now = Date.now();
+      const childKumisId = `${batchYogur.id}-KUM`;
+
+      // Volumen disponible reversible: leche actual de yogur + lo que ya se había extraído para kumis
+      const prevExtraidosKumis =
+        batchYogur.pasteurizacion.extraccionKumis?.litrosExtraidos || 0;
+      const volumenBaseDisponible =
+        batchYogur.pasteurizacion.litrosLeche + prevExtraidosKumis;
+      const nuevoLitrosKumis = Math.min(
+        Math.max(0, litrosKumis),
+        volumenBaseDisponible
+      );
+      const nuevoVolumenYogur = Math.max(
+        0,
+        volumenBaseDisponible - nuevoLitrosKumis
+      );
+      const esDesvioTotal = nuevoVolumenYogur === 0 && nuevoLitrosKumis > 0;
+      const nuevoAzucarKg = Number(((nuevoVolumenYogur / 40) * 3.2).toFixed(2));
+
+      // Descontar litros del lote de Yogur dulce (o auto-cerrar si desvío total)
+      setBatchYogur((prev) => {
+        let obs = prev.observaciones || '';
+        const notaDesvio =
+          'Lote desviado en su totalidad hacia sub-lotes (0 L remanentes)';
+        if (esDesvioTotal) {
+          if (!obs.includes(notaDesvio)) {
+            obs = obs ? `${obs}. ${notaDesvio}.` : `${notaDesvio}.`;
+          }
+        } else {
+          obs = obs
+            .replace(
+              /(\. )?Lote desviado en su totalidad hacia sub-lotes \(0 L remanentes\)\.?/g,
+              ''
+            )
+            .trim();
+        }
+
+        return {
+          ...prev,
+          status: esDesvioTotal
+            ? 'COMPLETADO'
+            : prev.status === 'COMPLETADO'
+            ? 'NOMINAL'
+            : prev.status,
+          observaciones: obs || undefined,
+          processTimer: {
+            ...prev.processTimer,
+            isRunning: esDesvioTotal ? false : prev.processTimer.isRunning,
+            isCompleted: esDesvioTotal ? true : prev.processTimer.isCompleted,
+          },
+          pasteurizacion: {
+            ...prev.pasteurizacion,
+            litrosLeche: nuevoVolumenYogur,
+            extraccionKumis: {
+              realizado: nuevoLitrosKumis > 0,
+              litrosExtraidos: nuevoLitrosKumis,
+              hora: timeStr,
+            },
+            azucar: {
+              ...prev.pasteurizacion.azucar,
+              cantidadKg: prev.pasteurizacion.azucar?.esManual
+                ? prev.pasteurizacion.azucar.cantidadKg
+                : nuevoAzucarKg,
+            },
+          },
+        };
+      });
+
+      // Configurar el Lote Hijo de Kumis heredando materias primas y etapas previas
+      setBatchKumis((prev) => {
+        const loteLecheHeredado =
+          batchYogur.pasteurizacion.loteLeche || prev.pasteurizacion.loteLeche;
+        const loteAzucarHeredado =
+          batchYogur.pasteurizacion.azucar?.loteAzucar ||
+          batchYogur.pasteurizacion.loteAzucarPastur ||
+          prev.pasteurizacion.azucar?.loteAzucar ||
+          '';
+        const azucarProporcionalKg =
+          Math.round(nuevoLitrosKumis * 0.04 * 100) / 100;
+
+        const horaInicioRetencion =
+          batchYogur.pasteurizacion.sostenimiento?.horaInicio ||
+          batchYogur.pasteurizacion.calentamiento?.horaFin ||
+          timeStr;
+        const horaFinRetencion =
+          batchYogur.pasteurizacion.sostenimiento?.horaFin || timeStr;
+        const duracionRetencion =
+          batchYogur.pasteurizacion.sostenimiento?.duracionReal || '15 min';
+
+        const timestampInicioEnfriamiento =
+          batchYogur.pasteurizacion.enfriamiento?.timestampInicioEnfriamiento ||
+          (horaFinRetencion ? timeStringToTimestampToday(horaFinRetencion) : now);
+
+        return {
+          ...prev,
+          id: childKumisId,
+          productId: 'prod-kumis',
+          productName: 'Kumis Tradicional Fermentado',
+          lineId: 'line-fermentacion',
+          line: 'Línea de Fermentación',
+          operator: batchYogur.operator || prev.operator,
+          responsableProceso:
+            batchYogur.responsableProceso ||
+            batchYogur.operator ||
+            prev.responsableProceso,
+          operatorRole: batchYogur.operatorRole || prev.operatorRole,
+          operariosIntervinientes:
+            batchYogur.operariosIntervinientes || prev.operariosIntervinientes,
+          status: 'NOMINAL',
+          processTimer: {
+            ...prev.processTimer,
+            isRunning: true,
+            isCompleted: false,
+            startTime: batchYogur.processTimer.startTime || timeStr,
+            startTimestamp: batchYogur.processTimer.startTimestamp || now,
+          },
+          stageStatuses: {
+            acidificar: 'en_proceso',
+            'calentar-y-cuajar': 'pendiente',
+            desuerar: 'pendiente',
+            hilar: 'pendiente',
+            moldeo: 'pendiente',
+          },
+          pasteurizacion: {
+            ...prev.pasteurizacion,
+            litrosLeche: nuevoLitrosKumis,
+            loteLeche: loteLecheHeredado,
+            loteAzucar: loteAzucarHeredado,
+            loteAzucarPastur: loteAzucarHeredado,
+            llevaAzucar: true,
+            azucar: {
+              ...prev.pasteurizacion.azucar,
+              adicionado: true,
+              horaAdicion:
+                batchYogur.pasteurizacion.azucar?.horaAdicion ||
+                batchYogur.pasteurizacion.calentamiento?.horaInicio ||
+                timeStr,
+              cantidadKg: azucarProporcionalKg,
+              loteAzucar: loteAzucarHeredado,
+              esManual: false,
+            },
+            calentamiento: {
+              ...batchYogur.pasteurizacion.calentamiento,
+              iniciado: true,
+              completado: true,
+              horaInicio:
+                batchYogur.pasteurizacion.calentamiento?.horaInicio || timeStr,
+              horaFin:
+                batchYogur.pasteurizacion.calentamiento?.horaFin ||
+                horaInicioRetencion,
+              tiempoCalentamiento:
+                batchYogur.pasteurizacion.calentamiento?.tiempoCalentamiento ||
+                '45 min',
+            },
+            sostenimiento: {
+              ...batchYogur.pasteurizacion.sostenimiento,
+              iniciado: true,
+              completado: true,
+              horaInicio: horaInicioRetencion,
+              horaFin: horaFinRetencion,
+              duracionReal: duracionRetencion,
+            },
+            enfriamiento: {
+              ...prev.pasteurizacion.enfriamiento,
+              enfriamientoIniciado: true,
+              enfriamientoCompletado: false,
+              horaInicio: horaFinRetencion,
+              horaInicioEnfriamiento: horaFinRetencion,
+              horaFinEnfriamiento: null,
+              timestampInicioEnfriamiento: timestampInicioEnfriamiento,
+              tiempoEnfriamiento: null,
+              temperaturaFinal: 35.0,
+              esManual: false,
+            },
+            trasiego: {
+              ...prev.pasteurizacion.trasiego,
+              iniciado: false,
+              completado: false,
+              horaInicio: null,
+              horaFin: null,
+              timestampInicio: null,
+              tiempoTrasiego: null,
+            },
+          },
+        };
+      });
+
+      // Sincronizar asignación en Lote Padre
+      setParentBatch((prev) => {
+        let childFound = false;
+        const updatedChildren = prev.childBatches.map((child) => {
+          if (child.id === batchYogur.id || child.productId === 'prod-yogur') {
+            return {
+              ...child,
+              allocatedLiters: nuevoVolumenYogur,
+              status: (esDesvioTotal
+                ? 'completado'
+                : 'en_proceso') as 'completado' | 'en_proceso',
+            };
+          }
+          if (child.productId === 'prod-kumis') {
+            childFound = true;
+            return {
+              ...child,
+              id: childKumisId,
+              allocatedLiters: nuevoLitrosKumis,
+              status: 'en_proceso' as const,
+            };
+          }
+          return child;
+        });
+
+        if (!childFound) {
+          updatedChildren.push({
+            id: childKumisId,
+            parentBatchId: prev.id,
+            variant: 'kumis',
+            productId: 'prod-kumis',
+            productName: 'Kumis Tradicional',
+            allocatedLiters: nuevoLitrosKumis,
+            llevaAzucar: true,
+            targetInoculationTempRange: '30 - 35 °C',
+            createdAt: timeStr,
+            status: 'en_proceso' as const,
+          });
+        }
+
+        return {
+          ...prev,
+          childBatches: updatedChildren,
+        };
+      });
+
+      // Conmutación automática de pantalla al Lote Hijo de Kumis
+      setStagesByProduct((prev) => ({
+        ...prev,
+        'prod-kumis': 'acidificar',
+      }));
+      setActiveProductId('prod-kumis');
+      setSelectedLineId('line-fermentacion');
+
+      showToast(
+        esDesvioTotal
+          ? `✓ Desvío total hacia Kumis (${childKumisId}) con ${nuevoLitrosKumis} L. El lote padre fue completado y cerrado (0 L remanentes).`
+          : `✓ Lote Hijo de Kumis (${childKumisId}) iniciado con ${nuevoLitrosKumis} L. Se transfirió el foco a Kumis en Enfriamiento a 35 °C.`,
+        'success'
+      );
+    },
+    [
+      batchYogur.id,
+      batchYogur.operator,
+      batchYogur.responsableProceso,
+      batchYogur.operatorRole,
+      batchYogur.operariosIntervinientes,
+      batchYogur.pasteurizacion,
+      batchYogur.processTimer,
+      showToast,
+    ]
+  );
+
+  // 4. EXTRAER LOTE HIJO DE YOGUR GRIEGO DESDE YOGUR SIN AZÚCAR (EN CUARTO FRÍO)
+  const handleExtractYogurGriegoChildBatch = useCallback(
+    (litrosGriego: number) => {
+      const timeStr = getCurrentTimeString();
+      const now = Date.now();
+      const childGriegoId = `${batchYogur.id}-YGR`;
+
+      // Volumen disponible reversible: leche actual de yogur + lo que ya se había extraído para griego
+      const prevExtraidosGriego =
+        batchYogur.pasteurizacion.extraccionGriego?.litrosExtraidos || 0;
+      const volumenBaseDisponible =
+        batchYogur.pasteurizacion.litrosLeche + prevExtraidosGriego;
+      const nuevoLitrosGriego = Math.min(
+        Math.max(0, litrosGriego),
+        volumenBaseDisponible
+      );
+      const nuevoVolumenYogur = Math.max(
+        0,
+        volumenBaseDisponible - nuevoLitrosGriego
+      );
+      const esDesvioTotal = nuevoVolumenYogur === 0 && nuevoLitrosGriego > 0;
+
+      // Descontar litros del lote padre de Yogur Sin Azúcar (o auto-cerrar si desvío total)
+      setBatchYogur((prev) => {
+        let obs = prev.observaciones || '';
+        const notaDesvio =
+          'Lote desviado en su totalidad hacia sub-lotes (0 L remanentes)';
+        if (esDesvioTotal) {
+          if (!obs.includes(notaDesvio)) {
+            obs = obs ? `${obs}. ${notaDesvio}.` : `${notaDesvio}.`;
+          }
+        } else {
+          obs = obs
+            .replace(
+              /(\. )?Lote desviado en su totalidad hacia sub-lotes \(0 L remanentes\)\.?/g,
+              ''
+            )
+            .trim();
+        }
+
+        return {
+          ...prev,
+          status: esDesvioTotal
+            ? 'COMPLETADO'
+            : prev.status === 'COMPLETADO'
+            ? 'NOMINAL'
+            : prev.status,
+          observaciones: obs || undefined,
+          processTimer: {
+            ...prev.processTimer,
+            isRunning: esDesvioTotal ? false : prev.processTimer.isRunning,
+            isCompleted: esDesvioTotal ? true : prev.processTimer.isCompleted,
+          },
+          pasteurizacion: {
+            ...prev.pasteurizacion,
+            litrosLeche: nuevoVolumenYogur,
+            extraccionGriego: {
+              realizado: nuevoLitrosGriego > 0,
+              litrosExtraidos: nuevoLitrosGriego,
+              hora: timeStr,
+            },
+          },
+        };
+      });
+
+      // Configurar el Lote Hijo de Yogur Griego heredando materias primas y etapas previas
+      setBatchYogurGriego((prev) => {
+        const loteLecheHeredado =
+          batchYogur.pasteurizacion.loteLeche || prev.pasteurizacion.loteLeche;
+        const loteCultivoHeredado =
+          batchYogur.inoculacion.loteCultivo ||
+          batchYogur.pasteurizacion.loteCultivoLacticoPastur ||
+          prev.inoculacion.loteCultivo;
+
+        const horaEntradaFrio =
+          batchYogur.inoculacion.incubacion.horaEntradaCuartoFrio ||
+          batchYogur.inoculacion.incubacion.horaFin ||
+          timeStr;
+        const timestampEntradaFrio =
+          batchYogur.inoculacion.incubacion.horaEntradaCuartoFrio
+            ? timeStringToTimestampToday(
+                batchYogur.inoculacion.incubacion.horaEntradaCuartoFrio
+              )
+            : now;
+
+        const masaEstimada = Number((nuevoLitrosGriego * 0.35).toFixed(1));
+        const sueroEstimado = Number((nuevoLitrosGriego * 0.65).toFixed(1));
+
+        return {
+          ...prev,
+          id: childGriegoId,
+          productId: 'prod-yogur-griego',
+          productName: 'Yogur Griego',
+          lineId: 'line-fermentacion',
+          operator: batchYogur.operator || prev.operator,
+          responsableProceso:
+            batchYogur.responsableProceso ||
+            batchYogur.operator ||
+            prev.responsableProceso,
+          operatorRole: batchYogur.operatorRole || prev.operatorRole,
+          operariosIntervinientes:
+            batchYogur.operariosIntervinientes || prev.operariosIntervinientes,
+          status: 'NOMINAL',
+          processTimer: {
+            ...prev.processTimer,
+            isRunning: true,
+            isCompleted: false,
+            startTime: batchYogur.processTimer.startTime || timeStr,
+            startTimestamp: batchYogur.processTimer.startTimestamp || now,
+          },
+          stageStatuses: {
+            acidificar: 'completada',
+            'calentar-y-cuajar': 'completada',
+            desuerar: 'en_proceso',
+            hilar: 'pendiente',
+            moldeo: 'pendiente',
+          },
+          pasteurizacion: {
+            ...prev.pasteurizacion,
+            litrosLeche: nuevoLitrosGriego,
+            loteLeche: loteLecheHeredado,
+            calentamiento: {
+              ...prev.pasteurizacion.calentamiento,
+              iniciado: true,
+              completado: true,
+              horaInicio:
+                batchYogur.pasteurizacion.calentamiento?.horaInicio || timeStr,
+              horaFin:
+                batchYogur.pasteurizacion.calentamiento?.horaFin || timeStr,
+              tiempoCalentamiento:
+                batchYogur.pasteurizacion.calentamiento?.tiempoCalentamiento ||
+                '45 min',
+            },
+            sostenimiento: {
+              ...prev.pasteurizacion.sostenimiento,
+              iniciado: true,
+              completado: true,
+              horaInicio:
+                batchYogur.pasteurizacion.sostenimiento?.horaInicio || timeStr,
+              horaFin:
+                batchYogur.pasteurizacion.sostenimiento?.horaFin || timeStr,
+              duracionReal:
+                batchYogur.pasteurizacion.sostenimiento?.duracionReal ||
+                '15 min',
+            },
+            enfriamiento: {
+              ...prev.pasteurizacion.enfriamiento,
+              enfriamientoIniciado: true,
+              enfriamientoCompletado: true,
+              horaInicio:
+                batchYogur.pasteurizacion.enfriamiento?.horaInicio || timeStr,
+              horaFinEnfriamiento:
+                batchYogur.pasteurizacion.enfriamiento?.horaFinEnfriamiento ||
+                timeStr,
+              tiempoEnfriamiento:
+                batchYogur.pasteurizacion.enfriamiento?.tiempoEnfriamiento ||
+                '25 min',
+            },
+            trasiego: {
+              ...prev.pasteurizacion.trasiego,
+              iniciado: true,
+              completado: true,
+              horaInicio:
+                batchYogur.pasteurizacion.trasiego?.horaInicio || timeStr,
+              horaFin: batchYogur.pasteurizacion.trasiego?.horaFin || timeStr,
+              tiempoTrasiego:
+                batchYogur.pasteurizacion.trasiego?.tiempoTrasiego || '10 min',
+            },
+          },
+          inoculacion: {
+            ...prev.inoculacion,
+            loteCultivo: loteCultivoHeredado,
+            temperaturaConfirmada: true,
+            mezcladoConfirmado: true,
+            inoculacionConfirmada: true,
+            horaInoculacion: batchYogur.inoculacion.horaInoculacion || timeStr,
+            incubacion: {
+              ...prev.inoculacion.incubacion,
+              iniciada: true,
+              completada: true,
+              horaInicio:
+                batchYogur.inoculacion.incubacion?.horaInicio || timeStr,
+              horaFin: batchYogur.inoculacion.incubacion?.horaFin || timeStr,
+              tiempoTranscurrido:
+                batchYogur.inoculacion.incubacion?.tiempoTranscurrido || '8 h',
+            },
+          },
+          maduracionYFiltrado: {
+            cuartoFrio: {
+              ...prev.maduracionYFiltrado.cuartoFrio,
+              iniciado: true,
+              completado: false,
+              horaInicio: horaEntradaFrio,
+              timestampInicio: timestampEntradaFrio,
+              tiempoTranscurrido: null,
+            },
+            filtradoTelas: {
+              ...prev.maduracionYFiltrado.filtradoTelas,
+              iniciado: false,
+              completado: false,
+              horaInicio: null,
+              timestampInicio: null,
+              tiempoTranscurrido: null,
+              masaFiltradaKg: masaEstimada,
+              sueroEliminadoEstimadoLitros: sueroEstimado,
+            },
+          },
+        };
+      });
+
+      // Sincronizar asignación en Lote Padre
+      setParentBatch((prev) => {
+        let childFound = false;
+        const updatedChildren = prev.childBatches.map((child) => {
+          if (child.id === batchYogur.id || child.productId === 'prod-yogur') {
+            return {
+              ...child,
+              allocatedLiters: nuevoVolumenYogur,
+              status: (esDesvioTotal
+                ? 'completado'
+                : 'en_proceso') as 'completado' | 'en_proceso',
+            };
+          }
+          if (
+            child.id === childGriegoId ||
+            child.productId === 'prod-yogur-griego'
+          ) {
+            childFound = true;
+            return {
+              ...child,
+              id: childGriegoId,
+              allocatedLiters: nuevoLitrosGriego,
+              status: 'en_proceso' as const,
+            };
+          }
+          return child;
+        });
+
+        if (!childFound) {
+          updatedChildren.push({
+            id: childGriegoId,
+            parentBatchId: prev.id,
+            variant: 'yogur_griego',
+            productId: 'prod-yogur-griego',
+            productName: 'Yogur Griego',
+            allocatedLiters: nuevoLitrosGriego,
+            llevaAzucar: false,
+            targetInoculationTempRange: '42 - 45 °C',
+            createdAt: timeStr,
+            status: 'en_proceso' as const,
+          });
+        }
+
+        return {
+          ...prev,
+          childBatches: updatedChildren,
+        };
+      });
+
+      setStagesByProduct((prev) => ({
+        ...prev,
+        'prod-yogur-griego': 'desuerar',
+      }));
+      setActiveProductId('prod-yogur-griego');
+      setSelectedLineId('line-fermentacion');
+
+      showToast(
+        esDesvioTotal
+          ? `✓ Desvío total hacia Yogur Griego (${childGriegoId}) con ${nuevoLitrosGriego} L. El lote padre fue completado y cerrado (0 L remanentes).`
+          : `✓ Lote Hijo de Yogur Griego (${childGriegoId}) generado con ${nuevoLitrosGriego} L. Se transfirió el foco a Maduración y Filtrado.`,
+        'success'
+      );
+    },
+    [
+      batchYogur.id,
+      batchYogur.operator,
+      batchYogur.responsableProceso,
+      batchYogur.operatorRole,
+      batchYogur.operariosIntervinientes,
+      batchYogur.pasteurizacion,
+      batchYogur.inoculacion,
+      batchYogur.processTimer,
+      showToast,
+    ]
+  );
+
+  // Sincronizar automáticamente la hora de fin de retención del Yogur con el inicio de enfriamiento del Kumis
+  useEffect(() => {
+    const horaFinYogur = batchYogur.pasteurizacion.sostenimiento?.horaFin;
+    const duracionYogur = batchYogur.pasteurizacion.sostenimiento?.duracionReal;
+    const extraccionRealizada = Boolean(
+      batchYogur.pasteurizacion.extraccionKumis?.realizado
+    );
+
+    if (extraccionRealizada && horaFinYogur) {
+      setBatchKumis((prevKumis) => {
+        if (
+          prevKumis.pasteurizacion.sostenimiento?.horaFin === horaFinYogur &&
+          prevKumis.pasteurizacion.enfriamiento?.horaInicio === horaFinYogur
+        ) {
+          return prevKumis;
+        }
+
+        const nuevoEnfriamiento = {
+          ...prevKumis.pasteurizacion.enfriamiento,
+          horaInicio: horaFinYogur,
+          horaInicioEnfriamiento: horaFinYogur,
+          timestampInicioEnfriamiento: timeStringToTimestampToday(horaFinYogur),
+        };
+
+        if (
+          prevKumis.pasteurizacion.enfriamiento?.enfriamientoCompletado &&
+          prevKumis.pasteurizacion.enfriamiento?.horaFinEnfriamiento
+        ) {
+          nuevoEnfriamiento.tiempoEnfriamiento = computeDurationBetweenTimes(
+            horaFinYogur,
+            prevKumis.pasteurizacion.enfriamiento.horaFinEnfriamiento
+          ).human;
+        }
+
+        return {
+          ...prevKumis,
+          pasteurizacion: {
+            ...prevKumis.pasteurizacion,
+            sostenimiento: {
+              ...prevKumis.pasteurizacion.sostenimiento,
+              horaFin: horaFinYogur,
+              duracionReal:
+                duracionYogur ||
+                prevKumis.pasteurizacion.sostenimiento?.duracionReal,
+            },
+            enfriamiento: nuevoEnfriamiento,
+          },
+        };
+      });
+    }
+  }, [
+    batchYogur.pasteurizacion.sostenimiento?.horaFin,
+    batchYogur.pasteurizacion.sostenimiento?.duracionReal,
+    batchYogur.pasteurizacion.extraccionKumis?.realizado,
+  ]);
+
   // INICIAR CRONÓMETROS POR PRODUCTO
   const handleStartProcessTimer = useCallback(() => {
     const now = Date.now();
@@ -631,6 +1242,28 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
 
   // AVANZAR DE ETAPA EN EL SUB-LOTE ACTIVO
   const handleNextStage = useCallback(() => {
+    if (isKumis) {
+      const kumisStages: StageId[] = ['acidificar', 'calentar-y-cuajar', 'moldeo'];
+      const currentIndex = kumisStages.indexOf(currentStage);
+      if (currentIndex !== -1 && currentIndex < kumisStages.length - 1) {
+        const nextStage = kumisStages[currentIndex + 1];
+        setCurrentStage(nextStage);
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        setBatchKumis((prev) => ({
+          ...prev,
+          stageStatuses: {
+            ...prev.stageStatuses,
+            [currentStage]: 'completada',
+            [nextStage]: 'en_proceso',
+          },
+        }));
+        return;
+      } else {
+        setKumisReviewModalOpen(true);
+        return;
+      }
+    }
+
     const currentIndex = STAGE_ORDER.indexOf(currentStage);
     if (currentIndex < STAGE_ORDER.length - 1) {
       const nextStage = STAGE_ORDER[currentIndex + 1];
@@ -639,15 +1272,6 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
 
       if (isYogurGriego) {
         setBatchYogurGriego((prev) => ({
-          ...prev,
-          stageStatuses: {
-            ...prev.stageStatuses,
-            [currentStage]: 'completada',
-            [nextStage]: 'en_proceso',
-          },
-        }));
-      } else if (isKumis) {
-        setBatchKumis((prev) => ({
           ...prev,
           stageStatuses: {
             ...prev.stageStatuses,
@@ -695,7 +1319,7 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
   ]);
 
   // FINALIZAR LOTES
-  const handleFinalizeYogurGriegoBatch = useCallback(() => {
+  const handleFinalizeYogurGriegoBatch = useCallback((_openModal: boolean = true) => {
     const timeStr = getCurrentTimeString();
     const totalTime =
       batchYogurGriego.processTimer.formattedTime &&
@@ -942,6 +1566,17 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
         productId === 'prod-yogur-griego'
       ) {
         setSelectedLineId('line-fermentacion');
+        if (productId === 'prod-yogur-griego') {
+          setStagesByProduct((prev) => ({
+            ...prev,
+            'prod-yogur-griego':
+              prev['prod-yogur-griego'] &&
+              prev['prod-yogur-griego'] !== 'acidificar' &&
+              prev['prod-yogur-griego'] !== 'calentar-y-cuajar'
+                ? prev['prod-yogur-griego']
+                : 'desuerar',
+          }));
+        }
       } else {
         setSelectedLineId('line-pasta-hilada');
       }
@@ -972,7 +1607,7 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
       const kumisStage = stagesByProduct['prod-kumis'] || 'acidificar';
       const griegoStage = stagesByProduct['prod-yogur-griego'] || 'acidificar';
 
-      return [
+      const allFermentadosTabs: SubBatchTabInfo[] = [
         {
           productId: 'prod-yogur',
           batchId: batchYogur.id,
@@ -995,8 +1630,18 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
           icon: 'local_drink',
           allocatedLiters: batchKumis.pasteurizacion.litrosLeche,
           currentStage: kumisStage,
-          currentStageNumber: STAGE_ORDER.indexOf(kumisStage) + 1,
-          stageLabel: FERMENTADOS_STAGE_LABELS[kumisStage],
+          currentStageNumber:
+            kumisStage === 'moldeo' || kumisStage === 'hilar'
+              ? 3
+              : kumisStage === 'calentar-y-cuajar' || kumisStage === 'desuerar'
+              ? 2
+              : 1,
+          stageLabel:
+            kumisStage === 'moldeo' || kumisStage === 'hilar'
+              ? '3. Envasado'
+              : kumisStage === 'calentar-y-cuajar' || kumisStage === 'desuerar'
+              ? '2. Inoculación'
+              : '1. Pasteurización',
           status: batchKumis.status,
           timer: batchKumis.processTimer,
           isChildOfParent: true,
@@ -1016,6 +1661,9 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
           isChildOfParent: true,
         },
       ];
+
+      // Si un sub-lote no ha sido instanciado o tiene 0 Litros, su pestaña NO se renderiza
+      return allFermentadosTabs.filter((tab) => (tab.allocatedLiters ?? 0) > 0);
     }
 
     // Pestañas para Línea de Pasta Hilada (Quesos)
@@ -1074,6 +1722,7 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
   }, [
     isFermentacionLine,
     stagesByProduct,
+    activeProductId,
     batchYogur,
     batchKumis,
     batchYogurGriego,
@@ -1160,6 +1809,8 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
     parentBatch,
     startParentBatch,
     splitParentBatch,
+    handleExtractKumisChildBatch,
+    handleExtractYogurGriegoChildBatch,
     subBatchTabs,
 
     // Lotes Individuales

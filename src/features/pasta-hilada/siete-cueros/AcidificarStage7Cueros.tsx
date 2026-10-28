@@ -140,7 +140,7 @@ export const AcidificarStage7Cueros: React.FC<AcidificarStage7CuerosProps> = ({
   const horaInicioCalentamiento =
     state.inicioCalentamiento?.horaInicio ||
     processTimer.startTime ||
-    state.insumos.horaRegistro ||
+    (state.insumos as any)?.horaRegistro ||
     '';
 
   // Duración recalculada automáticamente de forma estricta

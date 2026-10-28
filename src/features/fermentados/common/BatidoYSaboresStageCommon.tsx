@@ -461,7 +461,7 @@ export const BatidoYSaboresStageCommon: React.FC<BatidoYSaboresStageCommonProps>
               : isBatidoRunning
               ? 'Batiendo...'
               : 'Por Iniciar',
-            tone: isBatidoCompleted ? 'emerald' : isBatidoRunning ? 'amber' : 'neutral',
+            tone: isBatidoCompleted ? 'emerald' : isBatidoRunning ? 'amber' : 'default',
           },
         ]}
       />

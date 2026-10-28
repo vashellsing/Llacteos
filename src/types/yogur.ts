@@ -10,9 +10,21 @@ export interface PasteurizacionYogurState {
   loteAzucarPastur?: string;
   loteCultivoLacticoPastur?: string;
   litrosKumisDestinados?: number;
+  extraccionKumis?: {
+    realizado: boolean;
+    litrosExtraidos: number;
+    hora: string;
+  };
+  extraccionGriego?: {
+    realizado: boolean;
+    litrosExtraidos: number;
+    hora: string;
+  };
 
   // Interruptor: ¿Este lote lleva azúcar? (Sí/No)
   llevaAzucar: boolean;
+  loteAzucar?: string;
+  cantidadAzucarKg?: number;
   azucar: {
     adicionado: boolean;
     horaAdicion: string | null;
@@ -54,6 +66,7 @@ export interface PasteurizacionYogurState {
     enfriamientoIniciado: boolean;
     enfriamientoCompletado: boolean; // "Llegó a 45 °C"
     horaInicio: string | null;
+    horaInicioEnfriamiento?: string | null;
     horaFinEnfriamiento: string | null;
     timestampInicioEnfriamiento: number | null;
     temperaturaFinal: number; // 45.0 °C
@@ -190,6 +203,8 @@ export interface BatidoYAdicionesYogurState {
       litrosBase: number;
       gramosEstevia: number; // en g
       loteEstevia: string;
+      horaAdicion?: string | null;
+      confirmado?: boolean;
     };
 
     // 3. "Yogur con azúcar": campo de azúcar (calculado 3,2 kg/40L, editable), saborizante (ml) y colorante (ml) opcionales
@@ -233,7 +248,6 @@ export interface BatidoYAdicionesYogurState {
     coloranteMl?: number;
     loteColorante?: string;
     saborizanteMl?: number;
-    loteSaborizante?: string;
     habilitarModificacionManual: boolean;
     registrado: boolean;
     horaRegistro: string | null;
@@ -355,7 +369,7 @@ export interface YogurBatchData {
 
 export const INITIAL_YOGUR_BATCH: YogurBatchData = {
   id: 'Lote YOG-01',
-  productName: 'Yogur Natural / Dulce / Kumis / Griego',
+  productName: 'Yogur Entero',
   productId: 'prod-yogur',
   lineId: 'line-fermentacion',
   line: 'Línea de Fermentación',

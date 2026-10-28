@@ -495,11 +495,7 @@ export const MoldeoStage7Cueros: React.FC<MoldeoStage7CuerosProps> = ({
               ).toFixed(2)} kg`
             : 'Sin derivaciones en este lote'
         }
-        variant={
-          isBocadilloHabilitado || isArequipeHabilitado
-            ? 'default'
-            : 'neutral'
-        }
+        variant="default"
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* VARIANTE 1: QUESADILLA CON BOCADILLO (60 g) */}

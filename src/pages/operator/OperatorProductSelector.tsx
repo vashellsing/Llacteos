@@ -193,10 +193,8 @@ export const OperatorProductSelector: React.FC<OperatorProductSelectorProps> = (
                       ) : prod.id === 'prod-kumis' ? (
                         <>
                           <span className="px-2 py-1 bg-indigo-50 border border-indigo-300 text-indigo-900 rounded-lg">1. Pasteurización (Kumis)</span>
-                          <span className="px-2 py-1 bg-[#fcfaf7] border border-[#e6decb] rounded-lg">2. Inoculación (Kumis)</span>
-                          <span className="px-2 py-1 bg-[#fcfaf7] border border-[#e6decb] rounded-lg">3. Maduración en Frío (Kumis)</span>
-                          <span className="px-2 py-1 bg-[#fcfaf7] border border-[#e6decb] rounded-lg">4. Batido y Adiciones (Kumis)</span>
-                          <span className="px-2 py-1 bg-[#fcfaf7] border border-[#e6decb] rounded-lg">5. Envasado y Almacenamiento (Kumis)</span>
+                          <span className="px-2 py-1 bg-[#fcfaf7] border border-[#e6decb] rounded-lg">2. Inocular e Incubar (Kumis)</span>
+                          <span className="px-2 py-1 bg-[#fcfaf7] border border-[#e6decb] rounded-lg">3. Envasar y Guardar (Kumis)</span>
                         </>
                       ) : prod.id === 'prod-yogur' ? (
                         <>

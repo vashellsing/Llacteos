@@ -133,10 +133,12 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
 
   // Insumos: LOTE AZÚCAR
   const loteAzucar = llevaAzucar
-    ? (pasteurizacion.loteAzucar || batidoYAdiciones.adiciones?.variedadAzucar?.loteAzucar || (batidoYAdiciones.adiciones as any)?.loteAzucar || 'AZ-ING-2026')
+    ? (pasteurizacion.azucar?.loteAzucar || pasteurizacion.loteAzucar || batidoYAdiciones.adiciones?.variedadAzucar?.loteAzucar || (batidoYAdiciones.adiciones as any)?.loteAzucar || 'AZ-ING-2026')
     : '';
   const gramosAzucar = llevaAzucar
-    ? (pasteurizacion.cantidadAzucarKg
+    ? (pasteurizacion.azucar?.cantidadKg
+        ? Math.round(pasteurizacion.azucar.cantidadKg * 1000)
+        : pasteurizacion.cantidadAzucarKg
         ? Math.round(pasteurizacion.cantidadAzucarKg * 1000)
         : (batidoYAdiciones.adiciones?.variedadAzucar?.gramosAzucar || (batidoYAdiciones.adiciones as any)?.gramosAzucar || 4500))
     : 0;
@@ -204,13 +206,27 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
     loteSaborizante: loteSaborizante,
   };
 
-  // Balance de masa total formulada vs. envasada
-  const lecheKg = (pasteurizacion.litrosLeche || 100) * 1.03;
+  // Desviaciones a sub-lotes (Kumis y Yogur Griego)
+  const extraccionKumisLitros = pasteurizacion.extraccionKumis?.realizado
+    ? Number(pasteurizacion.extraccionKumis.litrosExtraidos) || 0
+    : 0;
+  const extraccionGriegoLitros = pasteurizacion.extraccionGriego?.realizado
+    ? Number(pasteurizacion.extraccionGriego.litrosExtraidos) || 0
+    : 0;
+  const totalDesviadoSublotes = extraccionKumisLitros + extraccionGriegoLitros;
+  const volumenBaseRemanenteL = pasteurizacion.litrosLeche ?? 0;
+  const volumenInicialPadreL = volumenBaseRemanenteL + totalDesviadoSublotes;
+
+  // Balance de masa total formulada vs. envasada (calculada sobre volumen neto remanente)
+  const lecheKg = volumenBaseRemanenteL * 1.03;
   const adicAzucarKg = hasAzucar ? gramosAzucar / 1000 : 0;
   const adicEsteviaKg = hasEstevia ? gramosEstevia / 1000 : 0;
   const adicSaborKg = hasSaborizante ? cantidadSaborizante / 1000 : 0;
   const totalFormuladoKg = Math.round((lecheKg + adicAzucarKg + adicEsteviaKg + adicSaborKg) * 100) / 100;
   const rendimientoPct = totalFormuladoKg > 0 ? (totalKilosEnvasados / totalFormuladoKg) * 100 : 0;
+  const rendimientoSobreLechePct = volumenBaseRemanenteL > 0
+    ? Number(((totalLitrosEnvasados / volumenBaseRemanenteL) * 100).toFixed(1))
+    : 0;
 
   // Handlers para operarios intervinientes
   const handleAddOperator = (opName: string) => {
@@ -370,7 +386,7 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                 <div className="bg-white p-3 rounded-xl border border-[#e6decb] shadow-2xs flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-[#434655] uppercase font-bold tracking-wider">
-                      Total Leche Usada
+                      {totalDesviadoSublotes > 0 ? 'Volumen Neto Remanente' : 'Total Leche Usada'}
                     </span>
                     <span className="material-symbols-outlined text-purple-700 text-[20px]">
                       water_drop
@@ -378,11 +394,13 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                   </div>
                   <div className="my-1">
                     <span className="font-black text-xl text-purple-900 font-mono">
-                      {pasteurizacion.litrosLeche || 100} L
+                      {volumenBaseRemanenteL} L
                     </span>
                   </div>
                   <span className="text-[10px] text-gray-500 font-medium">
-                    Leche entera procesada
+                    {totalDesviadoSublotes > 0
+                      ? `Remanente (-${totalDesviadoSublotes} L desviados a sub-lotes)`
+                      : 'Leche entera procesada'}
                   </span>
                 </div>
 
@@ -460,10 +478,12 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                     </span>
                     <div className="mt-1 pt-1 border-t border-sky-100 flex items-center justify-between">
                       <span className="text-[11px] text-sky-800 font-bold">
-                        {pasteurizacion.litrosLeche || 100} L usados
+                        {volumenBaseRemanenteL} L usados
                       </span>
                       <span className="text-[9px] font-semibold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded">
-                        Pasteurizada a 85-90 °C
+                        {totalDesviadoSublotes > 0
+                          ? `Neto (-${totalDesviadoSublotes} L desviados)`
+                          : 'Pasteurizada a 85-90 °C'}
                       </span>
                     </div>
                   </div>
@@ -1033,7 +1053,7 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       Litros de Leche
                     </span>
                     <span className="text-sm font-black font-mono text-purple-950 mt-0.5">
-                      {pasteurizacion.litrosLeche || 100} L
+                      {pasteurizacion.litrosLeche ?? 0} L
                     </span>
                     <span className="text-[9px] text-gray-400 mt-0.5">
                       Lote: {pasteurizacion.loteLeche} · {pasteurizacion.acidezDornic} °D

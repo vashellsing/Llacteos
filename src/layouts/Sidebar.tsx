@@ -11,6 +11,7 @@ interface SidebarProps {
   productName?: string;
   productId?: string;
   lotesLeche?: LotesLeche;
+  llevaAzucar?: boolean;
   stageStatuses: Record<StageId, 'pendiente' | 'en_proceso' | 'completada'>;
   mobileOpen: boolean;
   onCloseMobile: () => void;
@@ -28,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   productName = 'Queso Doble Crema Industrial',
   productId,
   lotesLeche,
+  llevaAzucar,
   stageStatuses,
   mobileOpen,
   onCloseMobile,
@@ -35,10 +37,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCorrectionModal,
 }) => {
   const isYogurGriego =
-    productId === 'prod-yogur-griego' || productName.toLowerCase().includes('griego');
-  const isKumis = productId === 'prod-kumis' || productName.toLowerCase().includes('kumis');
+    productId === 'prod-yogur-griego' ||
+    (productId !== 'prod-yogur' &&
+      productId !== 'prod-kumis' &&
+      productName.toLowerCase().includes('griego') &&
+      !productName.toLowerCase().includes('kumis'));
+  const isKumis =
+    productId === 'prod-kumis' ||
+    (productId !== 'prod-yogur' &&
+      productId !== 'prod-yogur-griego' &&
+      productName.toLowerCase().includes('kumis') &&
+      !productName.toLowerCase().includes('griego'));
   const isYogur =
-    (productId === 'prod-yogur' || productName.toLowerCase().includes('yogur')) && !isYogurGriego;
+    productId === 'prod-yogur' ||
+    ((productName.toLowerCase().includes('yogur') || productName.toLowerCase().includes('yogurt')) &&
+      !isYogurGriego &&
+      !isKumis);
   const isQuesoPera = productId === 'prod-queso-pera' || productName.toLowerCase().includes('pera');
   const isQueso7Cueros =
     productId === 'prod-queso-7-cueros' ||
@@ -49,22 +63,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ? [
         { id: 'acidificar', label: '1. Pasteurizar Leche', icon: 'local_fire_department' },
         { id: 'calentar-y-cuajar', label: '2. Inocular e Incubar', icon: 'biotech' },
-        { id: 'desuerar', label: '3. Cuarto Frío y Mallas', icon: 'filter_alt' },
-        { id: 'hilar', label: '4. Batido y Sabores', icon: 'blender' },
+        { id: 'desuerar', label: '3. Cuarto Frío y Escurrido', icon: 'filter_alt' },
+        { id: 'hilar', label: '4. Batido', icon: 'blender' },
         { id: 'moldeo', label: '5. Envasar y Guardar', icon: 'inventory_2' },
       ]
     : isKumis
     ? [
         { id: 'acidificar', label: '1. Pasteurizar Leche', icon: 'local_fire_department' },
         { id: 'calentar-y-cuajar', label: '2. Inocular e Incubar', icon: 'biotech' },
-        { id: 'hilar', label: '3. Batido y Sabores', icon: 'blender' },
-        { id: 'moldeo', label: '4. Envasar y Guardar', icon: 'inventory_2' },
+        { id: 'moldeo', label: '3. Envasar y Guardar', icon: 'inventory_2' },
       ]
     : isYogur
     ? [
         { id: 'acidificar', label: '1. Pasteurizar Leche', icon: 'local_fire_department' },
         { id: 'calentar-y-cuajar', label: '2. Inocular e Incubar', icon: 'biotech' },
-        { id: 'hilar', label: '3. Batido y Sabores', icon: 'blender' },
+        { id: 'hilar', label: '3. Batido', icon: 'blender' },
         { id: 'moldeo', label: '4. Envasar y Guardar', icon: 'inventory_2' },
       ]
     : isQueso7Cueros
