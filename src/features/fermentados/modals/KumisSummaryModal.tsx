@@ -45,10 +45,12 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
   const [selectedDropdownOp, setSelectedDropdownOp] = useState<string>('');
   const [customOperatorName, setCustomOperatorName] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState<boolean>(false);
+  const [showConfirmAlert, setShowConfirmAlert] = useState<boolean>(false);
 
   // Sincronizar estados locales al abrir el modal o cambiar lote
   useEffect(() => {
     if (isOpen) {
+      setShowConfirmAlert(false);
       setLocalObservaciones(batch.observaciones || '');
       setOperariosList(
         batch.operariosIntervinientes && batch.operariosIntervinientes.length > 0
@@ -98,7 +100,10 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
   );
   const totalKilosEnvasados = Math.round((totalLitrosEnvasados * 1.03) * 100) / 100;
 
-  // 2. Formulación Kumis (REGLA 6: Siempre con azúcar)
+  // 2. Formulación Kumis (Condicional según si lleva azúcar desde Pasteurización)
+  const llevaAzucar = pasteurizacion.llevaAzucar !== false;
+  const hasAzucar = Boolean(llevaAzucar);
+
   const variedadAzucar = batidoYAdiciones.adiciones.variedadAzucar || {
     litrosBase: pasteurizacion.litrosLeche || 100,
     gramosAzucar: 4000,
@@ -106,14 +111,28 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
     loteAzucar: 'AZ-KUM-2026',
   };
 
-  const hasAzucar = true;
-  const hasNatural = false;
-  const hasEstevia = false;
+  const loteAzucar = hasAzucar
+    ? (pasteurizacion.loteAzucar || batidoYAdiciones.adiciones?.variedadAzucar?.loteAzucar || (batidoYAdiciones.adiciones as any)?.loteAzucar || 'AZ-KUM-2026')
+    : '';
+  const pesoAzucarKg = hasAzucar
+    ? (variedadAzucar.kilosAzucar || (pasteurizacion.cantidadAzucarKg ?? Number(((variedadAzucar.litrosBase / 40) * 3.2).toFixed(2))))
+    : 0;
+
+  // Lote Estevia si se utilizó
+  const loteEsteviaRegistrado =
+    batidoYAdiciones.adiciones?.variedadEstevia?.loteEstevia ||
+    (batidoYAdiciones.adiciones as any)?.loteEstevia ||
+    '';
+  const gramosEsteviaRegistrados =
+    batidoYAdiciones.adiciones?.variedadEstevia?.gramosEstevia ??
+    (batidoYAdiciones.adiciones as any)?.gramosEstevia ??
+    0;
+  const hasEstevia = Boolean(!hasAzucar && (loteEsteviaRegistrado || gramosEsteviaRegistrados > 0));
+  const hasNatural = !hasAzucar && !hasEstevia;
 
   // 3. Balance de masa y rendimiento
   const lecheBaseLitros = pasteurizacion.litrosLeche || 100;
   const lecheKg = Math.round(lecheBaseLitros * 1.03 * 100) / 100;
-  const pesoAzucarKg = variedadAzucar.kilosAzucar || Number(((variedadAzucar.litrosBase / 40) * 3.2).toFixed(2));
   const totalAdicionesKg = Math.round(pesoAzucarKg * 100) / 100;
   const masaTotalFormuladaKg = Math.round((lecheKg + totalAdicionesKg) * 100) / 100;
 
@@ -154,8 +173,21 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
     }
   };
 
+  const handleConfirmFinalize = () => {
+    handleSaveObservaciones();
+    if (onChangeOperariosIntervinientes) {
+      onChangeOperariosIntervinientes(operariosList);
+    }
+    setShowConfirmAlert(false);
+    if (onFinalizeBatch) {
+      onFinalizeBatch();
+    }
+    onClose();
+  };
+
   return (
-    <Modal
+    <>
+      <Modal
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="4xl"
@@ -232,11 +264,7 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
 
             {onFinalizeBatch && batch.status !== 'COMPLETADO' && (
               <button
-                onClick={() => {
-                  handleSaveObservaciones();
-                  onFinalizeBatch();
-                  onClose();
-                }}
+                onClick={() => setShowConfirmAlert(true)}
                 className="h-10 px-5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
               >
                 <span className="material-symbols-outlined text-[17px]">task_alt</span>
@@ -369,24 +397,46 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Tarjeta 3: Lote Azúcar (Obligatoria / Estándar) */}
-                  <div className="p-3.5 rounded-xl bg-white border-2 border-amber-300 flex flex-col justify-between shadow-2xs">
+                  {/* Tarjeta 3: Lote Azúcar (Condicional según si lleva azúcar) */}
+                  <div
+                    className={`p-3.5 rounded-xl border-2 flex flex-col justify-between shadow-2xs ${
+                      hasAzucar
+                        ? 'bg-white border-amber-300'
+                        : 'bg-gray-50/80 border-gray-200 opacity-60'
+                    }`}
+                  >
                     <div>
-                      <span className="text-[9px] font-bold uppercase block text-amber-700">
+                      <span
+                        className={`text-[9px] font-bold uppercase block ${
+                          hasAzucar ? 'text-amber-700' : 'text-gray-400'
+                        }`}
+                      >
                         Lote Azúcar
                       </span>
-                      <strong className="text-sm font-mono font-black block mt-0.5 text-amber-950">
-                        {variedadAzucar.loteAzucar}
+                      <strong
+                        className={`text-sm font-mono font-black block mt-0.5 truncate ${
+                          hasAzucar ? 'text-amber-950' : 'text-gray-400'
+                        }`}
+                      >
+                        {hasAzucar ? (variedadAzucar.loteAzucar || loteAzucar || 'AZ-KUM-2026') : 'N/A - Sin adición de azúcar'}
                       </strong>
                     </div>
-                    <div className="mt-2 pt-2 border-t border-amber-100 flex items-center justify-between text-[10px]">
+                    <div
+                      className={`mt-2 pt-2 border-t flex items-center justify-between text-[10px] ${
+                        hasAzucar ? 'border-amber-100' : 'border-gray-200'
+                      }`}
+                    >
                       <span className="text-gray-500">Cantidad:</span>
-                      <span className="font-bold text-amber-900">
-                        {pesoAzucarKg} kg
+                      <span className={`font-bold ${hasAzucar ? 'text-amber-900' : 'text-gray-400'}`}>
+                        {hasAzucar ? `${pesoAzucarKg} kg` : '0 kg'}
                       </span>
                     </div>
-                    <span className="text-[9px] text-amber-700 font-semibold mt-1">
-                      ✓ Sacarosa industrial (3,2 kg/40 L)
+                    <span
+                      className={`text-[9px] font-semibold mt-1 ${
+                        hasAzucar ? 'text-amber-700' : 'text-gray-400'
+                      }`}
+                    >
+                      {hasAzucar ? '✓ Sacarosa industrial (3,2 kg/40 L)' : 'Sin adición de azúcar'}
                     </span>
                   </div>
                 </div>
@@ -399,47 +449,78 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
                 </div>
               </div>
 
-              {/* 3. SECCIÓN: FORMULACIÓN DE KUMIS (SIEMPRE CON AZÚCAR - REGLA 6) */}
+              {/* 3. SECCIÓN: FORMULACIÓN DE KUMIS */}
               <div className="p-5 rounded-2xl bg-[#fcfaf7] border border-[#e6decb] flex flex-col gap-3">
                 <span className="text-xs font-black uppercase tracking-wider text-gray-700 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                  Formulación de Kumis (Siempre con Azúcar · NTC-805)
+                  Formulación de Kumis ({hasAzucar ? 'Con Azúcar' : 'Sin Azúcar Tradicional'} · NTC-805)
                 </span>
 
-                <div className="p-4 rounded-xl border bg-white border-amber-400 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-base text-amber-950">Kumis Tradicional con Azúcar</span>
-                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
-                        100% DEL LOTE
-                      </span>
+                {hasAzucar ? (
+                  <div className="p-4 rounded-xl border bg-white border-amber-400 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-base text-amber-950">Kumis Tradicional con Azúcar</span>
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                          100% DEL LOTE
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">
+                        El Kumis con azúcar añadida (proporción: 3,2 kg por cada 40 L de leche).
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-600 mt-1">
-                      El Kumis siempre se elabora con azúcar añadida (proporción: 3,2 kg por cada 40 L de leche).
-                    </p>
-                  </div>
 
-                  <div className="flex items-center gap-6 text-xs bg-amber-50/70 p-3 rounded-xl border border-amber-200">
-                    <div>
-                      <span className="text-gray-500 block text-[10px] uppercase font-bold">Volumen Base:</span>
-                      <strong className="font-mono text-amber-950 text-base">
-                        {variedadAzucar.litrosBase || 0} L
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[10px] uppercase font-bold">Azúcar Añadida:</span>
-                      <strong className="font-mono text-amber-950 text-base">
-                        {pesoAzucarKg} kg
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[10px] uppercase font-bold">Lote Azúcar:</span>
-                      <strong className="font-mono text-amber-950 text-base">
-                        {variedadAzucar.loteAzucar}
-                      </strong>
+                    <div className="flex items-center gap-6 text-xs bg-amber-50/70 p-3 rounded-xl border border-amber-200">
+                      <div>
+                        <span className="text-gray-500 block text-[10px] uppercase font-bold">Volumen Base:</span>
+                        <strong className="font-mono text-amber-950 text-base">
+                          {variedadAzucar.litrosBase || 0} L
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px] uppercase font-bold">Azúcar Añadida:</span>
+                        <strong className="font-mono text-amber-950 text-base">
+                          {pesoAzucarKg} kg
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px] uppercase font-bold">Lote Azúcar:</span>
+                        <strong className="font-mono text-amber-950 text-base">
+                          {variedadAzucar.loteAzucar}
+                        </strong>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-4 rounded-xl border bg-white border-gray-300 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-base text-gray-900">Kumis Sin Azúcar Tradicional</span>
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
+                          LÍNEA DIETÉTICA / NATURAL
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Lote procesado sin adición de sacarosa tradicional.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-6 text-xs bg-gray-50 p-3 rounded-xl border border-gray-200">
+                      <div>
+                        <span className="text-gray-500 block text-[10px] uppercase font-bold">Azúcar Añadida:</span>
+                        <strong className="font-mono text-gray-600 text-base">
+                          0 kg (N/A)
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px] uppercase font-bold">Lote Azúcar:</span>
+                        <strong className="font-mono text-gray-600 text-base">
+                          N/A - Sin adición de azúcar
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 4. SECCIÓN: PRESENTACIONES EXCLUSIVAS DE KUMIS (SOLO 1 L Y 2 L - REGLA 8) */}
@@ -906,5 +987,66 @@ export const KumisSummaryModal: React.FC<KumisSummaryModalProps> = ({
           )}
       </div>
     </Modal>
+
+    {/* MODAL DE ADVERTENCIA: CONFIRMACIÓN CRÍTICA DE CIERRE DE LOTE */}
+    {showConfirmAlert && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+        <div className="w-full max-w-md bg-white rounded-3xl border-2 border-amber-300 shadow-2xl p-6 flex flex-col gap-5 animate-scaleUp">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-[28px]">
+                warning
+              </span>
+            </div>
+            <div className="flex flex-col gap-1 min-w-0">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-amber-800">
+                Advertencia de Cierre Definitivo
+              </span>
+              <h3 className="text-base sm:text-lg font-black text-gray-900 leading-snug">
+                ¿Deseas finalizar el lote?
+              </h3>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-xs text-amber-950 font-bold leading-relaxed">
+            Una vez terminado el proceso no se podrá modificar. ¿Deseas finalizar el lote?
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 flex flex-col gap-1.5 text-xs text-gray-600">
+            <div className="flex justify-between items-center">
+              <span className="font-bold">Lote:</span>
+              <span className="font-mono font-black text-gray-900">{batch.id}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="font-bold">Producto:</span>
+              <span className="font-semibold text-gray-800">{batch.productName}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="font-bold">Responsable:</span>
+              <span className="font-semibold text-gray-800">{responsable}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-200">
+            <button
+              type="button"
+              className="h-10 px-4 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-100 transition-all text-xs cursor-pointer"
+              onClick={() => setShowConfirmAlert(false)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="h-10 px-5 bg-emerald-700 text-white font-bold rounded-xl hover:bg-emerald-800 transition-all shadow-md text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+              onClick={handleConfirmFinalize}
+            >
+              <span className="material-symbols-outlined text-[16px]">check_circle</span>
+              <span>Aceptar / Finalizar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };

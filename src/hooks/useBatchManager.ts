@@ -735,79 +735,89 @@ export function useBatchManager({ showToast }: UseBatchManagerParams) {
     );
   }, [batchYogurGriego.processTimer.formattedTime, showToast]);
 
-  const handleFinalizeKumisBatch = useCallback(() => {
-    const timeStr = getCurrentTimeString();
-    const totalTime =
-      batchKumis.processTimer.formattedTime &&
-      batchKumis.processTimer.formattedTime !== '00:00:00'
-        ? batchKumis.processTimer.formattedTime
-        : '20h 45m';
+  const handleFinalizeKumisBatch = useCallback(
+    (openModal: boolean = true) => {
+      const timeStr = getCurrentTimeString();
+      const totalTime =
+        batchKumis.processTimer.formattedTime &&
+        batchKumis.processTimer.formattedTime !== '00:00:00'
+          ? batchKumis.processTimer.formattedTime
+          : '20h 45m';
 
-    setBatchKumis((prev) => ({
-      ...prev,
-      status: 'COMPLETADO',
-      processTimer: {
-        ...prev.processTimer,
-        isRunning: false,
-        isCompleted: true,
-        formattedTime: totalTime,
-      },
-      stageStatuses: {
-        acidificar: 'completada',
-        'calentar-y-cuajar': 'completada',
-        desuerar: 'completada',
-        hilar: 'completada',
-        moldeo: 'completada',
-      },
-      envasado: {
-        ...prev.envasado,
-        procesoFinalizado: {
-          finalizado: true,
-          horaFinalizacion: timeStr,
-          tiempoTotalProceso: totalTime,
+      setBatchKumis((prev) => ({
+        ...prev,
+        status: 'COMPLETADO',
+        processTimer: {
+          ...prev.processTimer,
+          isRunning: false,
+          isCompleted: true,
+          formattedTime: totalTime,
         },
-      },
-    }));
-    setKumisReviewModalOpen(true);
-    showToast(`✓ Lote de Kumis terminado y guardado (${totalTime}).`, 'success');
-  }, [batchKumis.processTimer.formattedTime, showToast]);
-
-  const handleFinalizeYogurBatch = useCallback(() => {
-    const timeStr = getCurrentTimeString();
-    const totalTime =
-      batchYogur.processTimer.formattedTime &&
-      batchYogur.processTimer.formattedTime !== '00:00:00'
-        ? batchYogur.processTimer.formattedTime
-        : '20h 30m';
-
-    setBatchYogur((prev) => ({
-      ...prev,
-      status: 'COMPLETADO',
-      processTimer: {
-        ...prev.processTimer,
-        isRunning: false,
-        isCompleted: true,
-        formattedTime: totalTime,
-      },
-      stageStatuses: {
-        acidificar: 'completada',
-        'calentar-y-cuajar': 'completada',
-        desuerar: 'completada',
-        hilar: 'completada',
-        moldeo: 'completada',
-      },
-      envasado: {
-        ...prev.envasado,
-        procesoFinalizado: {
-          finalizado: true,
-          horaFinalizacion: timeStr,
-          tiempoTotalProceso: totalTime,
+        stageStatuses: {
+          acidificar: 'completada',
+          'calentar-y-cuajar': 'completada',
+          desuerar: 'completada',
+          hilar: 'completada',
+          moldeo: 'completada',
         },
-      },
-    }));
-    setYogurReviewModalOpen(true);
-    showToast(`✓ Lote de Yogur terminado y guardado (${totalTime}).`, 'success');
-  }, [batchYogur.processTimer.formattedTime, showToast]);
+        envasado: {
+          ...prev.envasado,
+          procesoFinalizado: {
+            finalizado: true,
+            horaFinalizacion: timeStr,
+            tiempoTotalProceso: totalTime,
+          },
+        },
+      }));
+      if (openModal) {
+        setKumisReviewModalOpen(true);
+      }
+      showToast(`✓ Lote de Kumis terminado y guardado (${totalTime}).`, 'success');
+    },
+    [batchKumis.processTimer.formattedTime, showToast]
+  );
+
+  const handleFinalizeYogurBatch = useCallback(
+    (openModal: boolean = true) => {
+      const timeStr = getCurrentTimeString();
+      const totalTime =
+        batchYogur.processTimer.formattedTime &&
+        batchYogur.processTimer.formattedTime !== '00:00:00'
+          ? batchYogur.processTimer.formattedTime
+          : '20h 30m';
+
+      setBatchYogur((prev) => ({
+        ...prev,
+        status: 'COMPLETADO',
+        processTimer: {
+          ...prev.processTimer,
+          isRunning: false,
+          isCompleted: true,
+          formattedTime: totalTime,
+        },
+        stageStatuses: {
+          acidificar: 'completada',
+          'calentar-y-cuajar': 'completada',
+          desuerar: 'completada',
+          hilar: 'completada',
+          moldeo: 'completada',
+        },
+        envasado: {
+          ...prev.envasado,
+          procesoFinalizado: {
+            finalizado: true,
+            horaFinalizacion: timeStr,
+            tiempoTotalProceso: totalTime,
+          },
+        },
+      }));
+      if (openModal) {
+        setYogurReviewModalOpen(true);
+      }
+      showToast(`✓ Lote de Yogur terminado y guardado (${totalTime}).`, 'success');
+    },
+    [batchYogur.processTimer.formattedTime, showToast]
+  );
 
   const handleFinalizeBatch = useCallback(
     (openModal: boolean = true) => {

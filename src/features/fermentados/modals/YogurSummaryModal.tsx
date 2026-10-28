@@ -45,10 +45,12 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
   const [selectedDropdownOp, setSelectedDropdownOp] = useState<string>('');
   const [customOperatorName, setCustomOperatorName] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState<boolean>(false);
+  const [showConfirmAlert, setShowConfirmAlert] = useState<boolean>(false);
 
   // Sincronizar estados locales al abrir el modal o cambiar lote
   useEffect(() => {
     if (isOpen) {
+      setShowConfirmAlert(false);
       setLocalObservaciones(batch.observaciones || '');
       setOperariosList(
         batch.operariosIntervinientes && batch.operariosIntervinientes.length > 0
@@ -70,89 +72,143 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
 
   const { pasteurizacion, inoculacion, maduracionFrio, batidoYAdiciones, envasado } = batch;
 
-  // 1. Cálculos de envasado (agregando presentaciones tradicionales y categorías Sin Azúcar / Stevia)
+  // Condicional de formulación según "¿Lleva azúcar?" definido en Pasteurización
+  const llevaAzucar = pasteurizacion.llevaAzucar !== false;
+
+  // 1. Cálculos de envasado reales por categoría
+  // Categoría 1: Envases Sin Azúcar (Natural)
   const uSinAzucar_200ml = envasado.formatos.sinAzucar_botella200ml || 0;
   const uSinAzucar_1L = envasado.formatos.sinAzucar_botella1L || 0;
   const uSinAzucar_2L = envasado.formatos.sinAzucar_botella2L || 0;
   const uSinAzucar_4L = envasado.formatos.sinAzucar_bolsa4L || 0;
+  const unidadesSinAzucar = uSinAzucar_200ml + uSinAzucar_1L + uSinAzucar_2L + uSinAzucar_4L;
+  const litrosSinAzucar = Number(
+    (uSinAzucar_200ml * 0.2 + uSinAzucar_1L * 1.0 + uSinAzucar_2L * 2.0 + uSinAzucar_4L * 4.0).toFixed(2)
+  );
 
+  // Categoría 2: Envases Con Stevia
   const uStevia_120ml = envasado.formatos.stevia_botella120ml || 0;
   const uStevia_200ml = envasado.formatos.stevia_botella200ml || 0;
   const uStevia_1L = envasado.formatos.stevia_botella1L || 0;
   const uStevia_2L = envasado.formatos.stevia_botella2L || 0;
   const uStevia_4L = envasado.formatos.stevia_bolsa4L || 0;
+  const unidadesEstevia = uStevia_120ml + uStevia_200ml + uStevia_1L + uStevia_2L + uStevia_4L;
+  const litrosEstevia = Number(
+    (uStevia_120ml * 0.12 + uStevia_200ml * 0.2 + uStevia_1L * 1.0 + uStevia_2L * 2.0 + uStevia_4L * 4.0).toFixed(2)
+  );
 
-  const uTrad_120ml = envasado.formatos.botella120ml || 0;
-  const uTrad_200ml = (envasado.formatos.botella200ml ?? envasado.formatos.vaso200g) || 0;
-  const uTrad_1L = (envasado.formatos.botella1L ?? envasado.formatos.botella1000g) || 0;
-  const uTrad_2L = envasado.formatos.botella2L || 0;
-  const uTrad_4L = envasado.formatos.bolsa4L || 0;
+  // Categoría 3: Envases Tradicionales Con Azúcar (exclusivo para cuando llevaAzucar === true)
+  const uTrad_120ml = llevaAzucar ? (envasado.formatos.botella120ml || 0) : 0;
+  const uTrad_200ml = llevaAzucar ? ((envasado.formatos.botella200ml ?? envasado.formatos.vaso200g) || 0) : 0;
+  const uTrad_1L = llevaAzucar ? ((envasado.formatos.botella1L ?? envasado.formatos.botella1000g) || 0) : 0;
+  const uTrad_2L = llevaAzucar ? (envasado.formatos.botella2L || 0) : 0;
+  const uTrad_4L = llevaAzucar ? (envasado.formatos.bolsa4L || 0) : 0;
+  const unidadesAzucar = llevaAzucar
+    ? (uTrad_120ml + uTrad_200ml + uTrad_1L + uTrad_2L + uTrad_4L)
+    : 0;
+  const litrosAzucar = llevaAzucar
+    ? Number((uTrad_120ml * 0.12 + uTrad_200ml * 0.2 + uTrad_1L * 1.0 + uTrad_2L * 2.0 + uTrad_4L * 4.0).toFixed(2))
+    : 0;
 
+  // Unidades consolidadas por presentación
   const u120ml = uStevia_120ml + uTrad_120ml;
   const u200ml = uSinAzucar_200ml + uStevia_200ml + uTrad_200ml;
   const u1L = uSinAzucar_1L + uStevia_1L + uTrad_1L;
   const u2L = uSinAzucar_2L + uStevia_2L + uTrad_2L;
   const u4L = uSinAzucar_4L + uStevia_4L + uTrad_4L;
 
-  const totalUnidades = u120ml + u200ml + u1L + u2L + u4L;
-  const totalLitrosEnvasados = Number(
-    (u120ml * 0.12 + u200ml * 0.2 + u1L * 1.0 + u2L * 2.0 + u4L * 4.0).toFixed(2)
-  );
+  const totalUnidades = unidadesSinAzucar + unidadesEstevia + unidadesAzucar;
+  const totalLitrosEnvasados = Number((litrosSinAzucar + litrosEstevia + litrosAzucar).toFixed(2));
   const totalKilosEnvasados = Math.round((totalLitrosEnvasados * 1.03) * 100) / 100;
   const totalGramosEnvasados = Math.round(totalKilosEnvasados * 1000);
 
-  // 2. Variedades de Yogur (Yogur sin azúcar, Yogur con azúcar, Yogur con estevia)
-  const variedadSinAzucar = batidoYAdiciones.adiciones.variedadSinAzucar || batidoYAdiciones.adiciones.variedadNatural || {
-    litrosBase: 25,
-    notaInformativa: 'Exento de azúcar, saborizante y colorante. Directo a envasado.',
-  };
-  const variedadAzucar = batidoYAdiciones.adiciones.variedadAzucar || {
-    litrosBase: 50,
-    gramosAzucar: 4000,
-    kilosAzucar: 4.0,
-    loteAzucar: 'AZU-2026-11',
-  };
-  const variedadEstevia = batidoYAdiciones.adiciones.variedadEstevia || {
-    litrosBase: 25,
-    gramosEstevia: 80,
-    loteEstevia: 'EST-2026-BIO',
-  };
-  const saborizante = batidoYAdiciones.adiciones.saborizante || {
-    habilitado: batidoYAdiciones.adiciones.variedadAzucar?.llevaSaborizante ?? true,
-    sabor: batidoYAdiciones.adiciones.variedadAzucar?.sabor || 'Mora',
-    cantidad: batidoYAdiciones.adiciones.variedadAzucar?.saborizanteMl || 800,
+  // Estados de elaboración por variedad (evaluados estrictamente en base a unidades reales envasadas)
+  const isElaboradoSinAzucar = unidadesSinAzucar > 0;
+  const isElaboradoAzucar = Boolean(llevaAzucar && unidadesAzucar > 0);
+  const isElaboradoEstevia = unidadesEstevia > 0;
+
+  // Compatibilidad con identificadores anteriores
+  const hasSinAzucar = isElaboradoSinAzucar;
+  const hasAzucar = Boolean(llevaAzucar);
+
+  // Insumos: LOTE AZÚCAR
+  const loteAzucar = llevaAzucar
+    ? (pasteurizacion.loteAzucar || batidoYAdiciones.adiciones?.variedadAzucar?.loteAzucar || (batidoYAdiciones.adiciones as any)?.loteAzucar || 'AZ-ING-2026')
+    : '';
+  const gramosAzucar = llevaAzucar
+    ? (pasteurizacion.cantidadAzucarKg
+        ? Math.round(pasteurizacion.cantidadAzucarKg * 1000)
+        : (batidoYAdiciones.adiciones?.variedadAzucar?.gramosAzucar || (batidoYAdiciones.adiciones as any)?.gramosAzucar || 4500))
+    : 0;
+
+  // Insumos: LOTE ESTEVIA
+  const loteEsteviaRegistrado =
+    batidoYAdiciones.adiciones?.variedadEstevia?.loteEstevia ||
+    (batidoYAdiciones.adiciones as any)?.loteEstevia ||
+    '';
+  const gramosEsteviaRegistrados =
+    batidoYAdiciones.adiciones?.variedadEstevia?.gramosEstevia ??
+    (batidoYAdiciones.adiciones as any)?.gramosEstevia ??
+    (batidoYAdiciones.adiciones as any)?.cantidadSteviaGramos ??
+    0;
+  const isSteviaUtilizada = Boolean(
+    !llevaAzucar && (
+      (batidoYAdiciones.adiciones as any)?.steviaConfirmada ||
+      (batidoYAdiciones.adiciones as any)?.horaAdicionStevia ||
+      batidoYAdiciones.adiciones?.variedadEstevia?.horaAdicion ||
+      loteEsteviaRegistrado ||
+      gramosEsteviaRegistrados > 0 ||
+      unidadesEstevia > 0
+    )
+  );
+  const hasEstevia = isSteviaUtilizada;
+  const loteEstevia = isSteviaUtilizada ? (loteEsteviaRegistrado || 'LOTE-STV-01') : '';
+  const gramosEstevia = isSteviaUtilizada ? gramosEsteviaRegistrados : 0;
+
+  // Datos de saborizante y colorante (estrictamente deshabilitados si el lote es Sin Azúcar)
+  const rawSaborizante = batidoYAdiciones.adiciones?.saborizante;
+  const rawVariedadAzucar = batidoYAdiciones.adiciones?.variedadAzucar;
+  const rawAdiciones = batidoYAdiciones.adiciones as any;
+
+  const hasSaborizante = Boolean(
+    llevaAzucar && (
+      rawSaborizante?.habilitado ??
+      rawVariedadAzucar?.llevaSaborizante ??
+      Boolean(
+        rawAdiciones?.saborizanteMl ||
+        rawVariedadAzucar?.saborizanteMl ||
+        rawAdiciones?.loteSaborizante ||
+        rawVariedadAzucar?.loteSaborizante ||
+        (rawSaborizante?.cantidad && rawSaborizante.cantidad > 0)
+      )
+    ) &&
+    rawSaborizante?.sabor !== 'Sin Saborizante' &&
+    rawVariedadAzucar?.sabor !== 'Sin Saborizante'
+  );
+
+  const saborNombre = hasSaborizante
+    ? (rawSaborizante?.sabor || rawVariedadAzucar?.sabor || rawAdiciones?.sabor || 'Mora')
+    : 'Natural';
+  const cantidadSaborizante = hasSaborizante
+    ? Number(rawSaborizante?.cantidad || rawVariedadAzucar?.saborizanteMl || rawAdiciones?.saborizanteMl || 0)
+    : 0;
+  const loteSaborizante = hasSaborizante
+    ? (rawSaborizante?.loteSaborizante || rawVariedadAzucar?.loteSaborizante || rawAdiciones?.loteSaborizante || '')
+    : '';
+
+  const saborizante = {
+    habilitado: hasSaborizante,
+    sabor: saborNombre,
+    cantidad: cantidadSaborizante,
     unidad: 'ml',
-    loteSaborizante: batidoYAdiciones.adiciones.variedadAzucar?.loteSaborizante || 'SAB-MORA-26',
+    loteSaborizante: loteSaborizante,
   };
-
-  const totalLitrosBaseVariedades =
-    (variedadSinAzucar.litrosBase || 0) +
-    (variedadAzucar.litrosBase || 0) +
-    (variedadEstevia.litrosBase || 0);
-
-  // Estados de elaboración de las 3 variedades
-  const hasSinAzucar = (variedadSinAzucar.litrosBase || 0) > 0;
-  const hasAzucar = (variedadAzucar.litrosBase || 0) > 0 || (variedadAzucar.gramosAzucar || 0) > 0;
-  const hasEstevia = (variedadEstevia.litrosBase || 0) > 0 || (variedadEstevia.gramosEstevia || 0) > 0;
-
-  // Unidades por variedad proporcionales a los litros base formulados
-  const unidadesSinAzucar = totalLitrosBaseVariedades > 0
-    ? Math.round(totalUnidades * ((variedadSinAzucar.litrosBase || 0) / totalLitrosBaseVariedades))
-    : 0;
-  const unidadesAzucar = totalLitrosBaseVariedades > 0
-    ? Math.round(totalUnidades * ((variedadAzucar.litrosBase || 0) / totalLitrosBaseVariedades))
-    : 0;
-  const unidadesEstevia = totalLitrosBaseVariedades > 0
-    ? Math.max(0, totalUnidades - unidadesSinAzucar - unidadesAzucar)
-    : 0;
 
   // Balance de masa total formulada vs. envasada
   const lecheKg = (pasteurizacion.litrosLeche || 100) * 1.03;
-  const adicAzucarKg = hasAzucar ? (variedadAzucar.gramosAzucar || 0) / 1000 : 0;
-  const adicEsteviaKg = hasEstevia ? (variedadEstevia.gramosEstevia || 0) / 1000 : 0;
-  const adicSaborKg = saborizante.habilitado && saborizante.sabor !== 'Sin Saborizante'
-    ? (saborizante.cantidad || 0) / 1000
-    : 0;
+  const adicAzucarKg = hasAzucar ? gramosAzucar / 1000 : 0;
+  const adicEsteviaKg = hasEstevia ? gramosEstevia / 1000 : 0;
+  const adicSaborKg = hasSaborizante ? cantidadSaborizante / 1000 : 0;
   const totalFormuladoKg = Math.round((lecheKg + adicAzucarKg + adicEsteviaKg + adicSaborKg) * 100) / 100;
   const rendimientoPct = totalFormuladoKg > 0 ? (totalKilosEnvasados / totalFormuladoKg) * 100 : 0;
 
@@ -199,13 +255,14 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
     }
   };
 
-  const handleSaveAndClose = () => {
+  const handleConfirmFinalize = () => {
     if (onChangeObservaciones) {
       onChangeObservaciones(localObservaciones);
     }
     if (onChangeOperariosIntervinientes) {
       onChangeOperariosIntervinientes(operariosList);
     }
+    setShowConfirmAlert(false);
     if (onFinalizeBatch) {
       onFinalizeBatch();
     }
@@ -215,7 +272,8 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
   const isCompleted = batch.processTimer.isCompleted || batch.status === 'COMPLETADO';
 
   return (
-    <Modal
+    <>
+      <Modal
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="4xl"
@@ -292,7 +350,7 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
             </button>
             <button
               className="h-10 px-5 bg-emerald-700 text-white font-bold rounded-xl hover:bg-emerald-800 transition-all shadow-md text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
-              onClick={handleSaveAndClose}
+              onClick={() => setShowConfirmAlert(true)}
             >
               <span className="material-symbols-outlined text-[17px]">task_alt</span>
               <span>Confirmar Proceso Terminado</span>
@@ -438,7 +496,7 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                     className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
                       hasAzucar
                         ? 'bg-white border-2 border-amber-500 shadow-2xs'
-                        : 'bg-gray-50/80 border-gray-200'
+                        : 'bg-gray-50/80 border-gray-200 opacity-60'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -458,13 +516,11 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       </span>
                     </div>
                     <span
-                      className={`font-bold font-mono text-sm mt-1 ${
+                      className={`font-bold font-mono text-sm mt-1 truncate ${
                         hasAzucar ? 'text-amber-950' : 'text-gray-400'
                       }`}
                     >
-                      {hasAzucar
-                        ? variedadAzucar.loteAzucar || batidoYAdiciones.adiciones.loteAzucar || 'AZ-ING-2026'
-                        : 'N/A'}
+                      {hasAzucar ? (loteAzucar || 'AZ-ING-2026') : 'N/A - Sin adición de azúcar'}
                     </span>
                     <div
                       className={`mt-1 pt-1 border-t flex items-center justify-between ${
@@ -474,14 +530,14 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       {hasAzucar ? (
                         <>
                           <span className="text-[11px] text-amber-800 font-bold">
-                            {variedadAzucar.gramosAzucar || 4500} g usados
+                            {gramosAzucar} g usados
                           </span>
                           <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
                             Sacarosa refinada
                           </span>
                         </>
                       ) : (
-                        <span className="text-[11px] text-gray-500 font-medium italic">
+                        <span className="text-[11px] text-gray-400 font-medium italic">
                           Sin adición de azúcar
                         </span>
                       )}
@@ -493,7 +549,7 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                     className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
                       hasEstevia
                         ? 'bg-white border-2 border-indigo-500 shadow-2xs'
-                        : 'bg-gray-50/80 border-gray-200'
+                        : 'bg-gray-50/80 border-gray-200 opacity-60'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -513,11 +569,11 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       </span>
                     </div>
                     <span
-                      className={`font-bold font-mono text-sm mt-1 ${
+                      className={`font-bold font-mono text-sm mt-1 truncate ${
                         hasEstevia ? 'text-indigo-950' : 'text-gray-400'
                       }`}
                     >
-                      {hasEstevia ? variedadEstevia.loteEstevia || 'EST-2026-BIO' : 'N/A'}
+                      {hasEstevia ? loteEstevia : 'N/A'}
                     </span>
                     <div
                       className={`mt-1 pt-1 border-t flex items-center justify-between ${
@@ -527,43 +583,39 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       {hasEstevia ? (
                         <>
                           <span className="text-[11px] text-indigo-800 font-bold">
-                            {variedadEstevia.gramosEstevia || 80} g usados
+                            {gramosEstevia} g usados
                           </span>
                           <span className="text-[9px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">
                             Glucósidos
                           </span>
                         </>
                       ) : (
-                        <span className="text-[11px] text-gray-500 font-medium italic">
+                        <span className="text-[11px] text-gray-400 font-medium italic">
                           Sin adición de estevia
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Tarjeta 5 (Condicional - Saborizante): LOTE SABORIZANTE NATURAL */}
+                  {/* Tarjeta 5 (Condicional - Saborizante): LOTE SABORIZANTE */}
                   <div
                     className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
-                      saborizante.habilitado && saborizante.sabor !== 'Sin Saborizante'
+                      hasSaborizante
                         ? 'bg-white border-2 border-rose-400 shadow-2xs'
-                        : 'bg-gray-50/80 border-gray-200'
+                        : 'bg-gray-50/80 border-gray-200 opacity-60'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <span
                         className={`text-[10px] font-extrabold uppercase tracking-wide ${
-                          saborizante.habilitado && saborizante.sabor !== 'Sin Saborizante'
-                            ? 'text-rose-900'
-                            : 'text-gray-400'
+                          hasSaborizante ? 'text-rose-900' : 'text-gray-400'
                         }`}
                       >
                         LOTE SABORIZANTE
                       </span>
                       <span
                         className={`material-symbols-outlined text-[18px] ${
-                          saborizante.habilitado && saborizante.sabor !== 'Sin Saborizante'
-                            ? 'text-rose-600'
-                            : 'text-gray-400'
+                          hasSaborizante ? 'text-rose-600' : 'text-gray-400'
                         }`}
                       >
                         local_florist
@@ -571,34 +623,28 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                     </div>
                     <span
                       className={`font-bold font-mono text-sm mt-1 truncate ${
-                        saborizante.habilitado && saborizante.sabor !== 'Sin Saborizante'
-                          ? 'text-rose-950'
-                          : 'text-gray-400'
+                        hasSaborizante ? 'text-rose-950' : 'text-gray-400'
                       }`}
                     >
-                      {saborizante.habilitado && saborizante.sabor !== 'Sin Saborizante'
-                        ? saborizante.loteSaborizante || 'SAB-MORA-26'
-                        : 'N/A'}
+                      {hasSaborizante ? (loteSaborizante || 'SAB-MORA-26') : 'N/A'}
                     </span>
                     <div
                       className={`mt-1 pt-1 border-t flex items-center justify-between ${
-                        saborizante.habilitado && saborizante.sabor !== 'Sin Saborizante'
-                          ? 'border-rose-100'
-                          : 'border-gray-200'
+                        hasSaborizante ? 'border-rose-100' : 'border-gray-200'
                       }`}
                     >
-                      {saborizante.habilitado && saborizante.sabor !== 'Sin Saborizante' ? (
+                      {hasSaborizante ? (
                         <>
                           <span className="text-[11px] text-rose-800 font-bold truncate">
-                            {saborizante.sabor}
+                            {saborNombre}
                           </span>
                           <span className="text-[9px] font-semibold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded shrink-0">
-                            {saborizante.cantidad} {saborizante.unidad}
+                            {cantidadSaborizante} ml
                           </span>
                         </>
                       ) : (
-                        <span className="text-[11px] text-gray-500 font-medium italic">
-                          Natural / Sin saborizante
+                        <span className="text-[11px] text-gray-400 font-medium italic">
+                          Sin adición de saborizante
                         </span>
                       )}
                     </div>
@@ -624,7 +670,7 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                   {/* Tarjeta A (Yogur sin azúcar) */}
                   <div
                     className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
-                      hasSinAzucar
+                      isElaboradoSinAzucar
                         ? 'bg-emerald-50/70 border-emerald-400 shadow-2xs'
                         : 'bg-gray-100/90 border-gray-300 text-gray-500'
                     }`}
@@ -633,38 +679,38 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       <div className="flex items-center gap-1.5">
                         <span
                           className={`material-symbols-outlined text-[18px] ${
-                            hasSinAzucar ? 'text-emerald-700' : 'text-gray-400'
+                            isElaboradoSinAzucar ? 'text-emerald-700' : 'text-gray-400'
                           }`}
                         >
                           eco
                         </span>
                         <span
                           className={`text-xs font-bold ${
-                            hasSinAzucar ? 'text-emerald-950' : 'text-gray-600'
+                            isElaboradoSinAzucar ? 'text-emerald-950' : 'text-gray-600'
                           }`}
                         >
-                          Yogur sin azúcar
+                          Yogur sin azúcar (Natural)
                         </span>
                       </div>
                       <span
                         className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                          hasSinAzucar
+                          isElaboradoSinAzucar
                             ? 'bg-emerald-200 text-emerald-900 border border-emerald-300'
                             : 'bg-gray-200 text-gray-500'
                         }`}
                       >
-                        {hasSinAzucar ? 'ELABORADO' : 'SIN UNIDADES'}
+                        {isElaboradoSinAzucar ? 'ELABORADO' : 'SIN UNIDADES'}
                       </span>
                     </div>
 
                     <div className="mt-2.5">
-                      {hasSinAzucar ? (
+                      {isElaboradoSinAzucar ? (
                         <div>
                           <span className="text-sm font-black font-mono text-emerald-950 block">
                             {unidadesSinAzucar} unidades obtenidas
                           </span>
                           <span className="text-[10px] text-emerald-800 font-medium mt-0.5 block">
-                            {variedadSinAzucar.litrosBase} L base ({(variedadSinAzucar.litrosBase * 1.03).toFixed(1)} kg) · Exento de azúcar y saborizante
+                            {litrosSinAzucar} L envasados ({(litrosSinAzucar * 1.03).toFixed(1)} kg) · Exento de azúcar y saborizante
                           </span>
                         </div>
                       ) : (
@@ -683,7 +729,7 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                   {/* Tarjeta B (Yogur Con Azúcar) */}
                   <div
                     className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
-                      hasAzucar
+                      isElaboradoAzucar
                         ? 'bg-amber-50/70 border-amber-400 shadow-2xs'
                         : 'bg-gray-100/90 border-gray-300 text-gray-500'
                     }`}
@@ -692,14 +738,14 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       <div className="flex items-center gap-1.5">
                         <span
                           className={`material-symbols-outlined text-[18px] ${
-                            hasAzucar ? 'text-amber-700' : 'text-gray-400'
+                            isElaboradoAzucar ? 'text-amber-700' : 'text-gray-400'
                           }`}
                         >
                           cookie
                         </span>
                         <span
                           className={`text-xs font-bold ${
-                            hasAzucar ? 'text-amber-950' : 'text-gray-600'
+                            isElaboradoAzucar ? 'text-amber-950' : 'text-gray-600'
                           }`}
                         >
                           Yogur Con Azúcar
@@ -707,23 +753,23 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       </div>
                       <span
                         className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                          hasAzucar
+                          isElaboradoAzucar
                             ? 'bg-amber-200 text-amber-900 border border-amber-300'
                             : 'bg-gray-200 text-gray-500'
                         }`}
                       >
-                        {hasAzucar ? 'ELABORADO' : 'SIN UNIDADES'}
+                        {isElaboradoAzucar ? 'ELABORADO' : 'SIN UNIDADES'}
                       </span>
                     </div>
 
                     <div className="mt-2.5">
-                      {hasAzucar ? (
+                      {isElaboradoAzucar ? (
                         <div>
                           <span className="text-sm font-black font-mono text-amber-950 block">
                             {unidadesAzucar} unidades obtenidas
                           </span>
                           <span className="text-[10px] text-amber-800 font-medium mt-0.5 block">
-                            {variedadAzucar.litrosBase} L base · {variedadAzucar.gramosAzucar || 4500} g azúcar ({variedadAzucar.kilosAzucar || 4.5} kg)
+                            {litrosAzucar} L envasados · {gramosAzucar} g azúcar ({(gramosAzucar / 1000).toFixed(2)} kg)
                           </span>
                         </div>
                       ) : (
@@ -742,7 +788,7 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                   {/* Tarjeta C (Yogur Con Estevia) */}
                   <div
                     className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
-                      hasEstevia
+                      isElaboradoEstevia
                         ? 'bg-indigo-50/70 border-indigo-400 shadow-2xs'
                         : 'bg-gray-100/90 border-gray-300 text-gray-500'
                     }`}
@@ -751,14 +797,14 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       <div className="flex items-center gap-1.5">
                         <span
                           className={`material-symbols-outlined text-[18px] ${
-                            hasEstevia ? 'text-indigo-700' : 'text-gray-400'
+                            isElaboradoEstevia ? 'text-indigo-700' : 'text-gray-400'
                           }`}
                         >
                           spa
                         </span>
                         <span
                           className={`text-xs font-bold ${
-                            hasEstevia ? 'text-indigo-950' : 'text-gray-600'
+                            isElaboradoEstevia ? 'text-indigo-950' : 'text-gray-600'
                           }`}
                         >
                           Yogur Con Estevia
@@ -766,23 +812,23 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       </div>
                       <span
                         className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                          hasEstevia
+                          isElaboradoEstevia
                             ? 'bg-indigo-200 text-indigo-900 border border-indigo-300'
                             : 'bg-gray-200 text-gray-500'
                         }`}
                       >
-                        {hasEstevia ? 'ELABORADO' : 'SIN UNIDADES'}
+                        {isElaboradoEstevia ? 'ELABORADO' : 'SIN UNIDADES'}
                       </span>
                     </div>
 
                     <div className="mt-2.5">
-                      {hasEstevia ? (
+                      {isElaboradoEstevia ? (
                         <div>
                           <span className="text-sm font-black font-mono text-indigo-950 block">
                             {unidadesEstevia} unidades obtenidas
                           </span>
                           <span className="text-[10px] text-indigo-800 font-medium mt-0.5 block">
-                            {variedadEstevia.litrosBase} L base · {variedadEstevia.gramosEstevia || 80} g estevia adicionada
+                            {litrosEstevia} L envasados · {gramosEstevia} g estevia adicionada
                           </span>
                         </div>
                       ) : (
@@ -1215,10 +1261,10 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       Yogur sin azúcar
                     </span>
                     <span className="text-sm font-black font-mono text-emerald-900 mt-0.5">
-                      {variedadSinAzucar.litrosBase || 0} L base
+                      {litrosSinAzucar} L envasados
                     </span>
                     <span className="text-[9px] text-gray-500 mt-0.5">
-                      Sin azúcar · Sin saborizante
+                      {isElaboradoSinAzucar ? `${unidadesSinAzucar} u · Sin azúcar` : 'Sin producción'}
                     </span>
                   </div>
 
@@ -1227,10 +1273,10 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                       Azúcar y Estevia
                     </span>
                     <span className="text-sm font-black font-mono text-amber-900 mt-0.5">
-                      {hasAzucar ? `${variedadAzucar.gramosAzucar} g az.` : '0 g az.'}
+                      {hasAzucar ? `${gramosAzucar} g az.` : '0 g az.'}
                     </span>
                     <span className="text-[9px] text-gray-500 mt-0.5">
-                      {hasEstevia ? `${variedadEstevia.gramosEstevia} g estevia` : '0 g estevia'}
+                      {hasEstevia ? `${gramosEstevia} g estevia` : '0 g estevia'}
                     </span>
                   </div>
 
@@ -1238,15 +1284,15 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
                     <span className="text-[9px] uppercase font-bold text-gray-500">
                       Saborizante Natural
                     </span>
-                    <span className="text-sm font-black font-mono text-rose-900 mt-0.5 truncate">
-                      {saborizante.habilitado && saborizante.sabor !== 'Sin Saborizante'
-                        ? saborizante.sabor
-                        : 'Natural'}
+                    <span className={`text-sm font-black font-mono mt-0.5 truncate ${
+                      hasSaborizante ? 'text-rose-900' : 'text-gray-400'
+                    }`}>
+                      {hasSaborizante ? saborNombre : 'Natural (N/A)'}
                     </span>
                     <span className="text-[9px] text-gray-500 mt-0.5 truncate">
-                      {saborizante.habilitado && saborizante.sabor !== 'Sin Saborizante'
-                        ? `${saborizante.cantidad} ${saborizante.unidad} · Lote ${saborizante.loteSaborizante}`
-                        : 'Sin saborizante añadido'}
+                      {hasSaborizante
+                        ? `${cantidadSaborizante} ml · Lote ${loteSaborizante}`
+                        : 'Sin adición de saborizante'}
                     </span>
                   </div>
                 </div>
@@ -1396,5 +1442,66 @@ export const YogurSummaryModal: React.FC<YogurSummaryModalProps> = ({
             </div>
           )}
     </Modal>
+
+      {/* MODAL DE ADVERTENCIA: CONFIRMACIÓN CRÍTICA DE CIERRE DE LOTE */}
+      {showConfirmAlert && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-md bg-white rounded-3xl border-2 border-amber-300 shadow-2xl p-6 flex flex-col gap-5 animate-scaleUp">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[28px]">
+                  warning
+                </span>
+              </div>
+              <div className="flex flex-col gap-1 min-w-0">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-amber-800">
+                  Advertencia de Cierre Definitivo
+                </span>
+                <h3 className="text-base sm:text-lg font-black text-gray-900 leading-snug">
+                  ¿Deseas finalizar el lote?
+                </h3>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-xs text-amber-950 font-bold leading-relaxed">
+              Una vez terminado el proceso no se podrá modificar. ¿Deseas finalizar el lote?
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 flex flex-col gap-1.5 text-xs text-gray-600">
+              <div className="flex justify-between items-center">
+                <span className="font-bold">Lote:</span>
+                <span className="font-mono font-black text-gray-900">{batch.id}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-bold">Producto:</span>
+                <span className="font-semibold text-gray-800">{batch.productName}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-bold">Responsable:</span>
+                <span className="font-semibold text-gray-800">{responsable}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-200">
+              <button
+                type="button"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-100 transition-all text-xs cursor-pointer"
+                onClick={() => setShowConfirmAlert(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="h-10 px-5 bg-emerald-700 text-white font-bold rounded-xl hover:bg-emerald-800 transition-all shadow-md text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                onClick={handleConfirmFinalize}
+              >
+                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                <span>Aceptar / Finalizar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };

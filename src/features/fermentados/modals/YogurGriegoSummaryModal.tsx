@@ -45,9 +45,11 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
   const [selectedDropdownOp, setSelectedDropdownOp] = useState<string>('');
   const [customOperatorName, setCustomOperatorName] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState<boolean>(false);
+  const [showConfirmAlert, setShowConfirmAlert] = useState<boolean>(false);
 
   useEffect(() => {
     if (isOpen) {
+      setShowConfirmAlert(false);
       setLocalObservaciones(batch.observaciones || '');
       setOperariosList(
         batch.operariosIntervinientes && batch.operariosIntervinientes.length > 0
@@ -129,8 +131,21 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
     onChangeObservaciones?.(localObservaciones);
   };
 
+  const handleConfirmFinalize = () => {
+    handleSaveObservaciones();
+    if (onChangeOperariosIntervinientes) {
+      onChangeOperariosIntervinientes(operariosList);
+    }
+    setShowConfirmAlert(false);
+    if (onFinalizeBatch) {
+      onFinalizeBatch();
+    }
+    onClose();
+  };
+
   return (
-    <Modal
+    <>
+      <Modal
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="5xl"
@@ -202,11 +217,7 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
 
             {onFinalizeBatch && (
               <button
-                onClick={() => {
-                  handleSaveObservaciones();
-                  onFinalizeBatch();
-                  onClose();
-                }}
+                onClick={() => setShowConfirmAlert(true)}
                 className="h-10 px-5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-[17px]">task_alt</span>
@@ -585,5 +596,66 @@ export const YogurGriegoSummaryModal: React.FC<YogurGriegoSummaryModalProps> = (
           )}
       </div>
     </Modal>
+
+    {/* MODAL DE ADVERTENCIA: CONFIRMACIÓN CRÍTICA DE CIERRE DE LOTE */}
+    {showConfirmAlert && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+        <div className="w-full max-w-md bg-white rounded-3xl border-2 border-amber-300 shadow-2xl p-6 flex flex-col gap-5 animate-scaleUp">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-[28px]">
+                warning
+              </span>
+            </div>
+            <div className="flex flex-col gap-1 min-w-0">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-amber-800">
+                Advertencia de Cierre Definitivo
+              </span>
+              <h3 className="text-base sm:text-lg font-black text-gray-900 leading-snug">
+                ¿Deseas finalizar el lote?
+              </h3>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-xs text-amber-950 font-bold leading-relaxed">
+            Una vez terminado el proceso no se podrá modificar. ¿Deseas finalizar el lote?
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 flex flex-col gap-1.5 text-xs text-gray-600">
+            <div className="flex justify-between items-center">
+              <span className="font-bold">Lote:</span>
+              <span className="font-mono font-black text-gray-900">{batch.id}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="font-bold">Producto:</span>
+              <span className="font-semibold text-gray-800">{batch.productName}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="font-bold">Responsable:</span>
+              <span className="font-semibold text-gray-800">{responsable}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-200">
+            <button
+              type="button"
+              className="h-10 px-4 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-100 transition-all text-xs cursor-pointer"
+              onClick={() => setShowConfirmAlert(false)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="h-10 px-5 bg-emerald-700 text-white font-bold rounded-xl hover:bg-emerald-800 transition-all shadow-md text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+              onClick={handleConfirmFinalize}
+            >
+              <span className="material-symbols-outlined text-[16px]">check_circle</span>
+              <span>Aceptar / Finalizar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };

@@ -296,7 +296,11 @@ export default function App() {
         onClose={() => setYogurReviewModalOpen(false)}
         batch={batchYogur}
         users={users}
-        onFinalizeBatch={handleFinalizeYogurBatch}
+        onFinalizeBatch={() => {
+          handleFinalizeYogurBatch(false);
+          setYogurReviewModalOpen(false);
+          setCurrentView('operator_line_select');
+        }}
         onChangeObservaciones={(obs) =>
           setBatchYogur((prev) => ({ ...prev, observaciones: obs }))
         }
@@ -313,7 +317,11 @@ export default function App() {
         onClose={() => setKumisReviewModalOpen(false)}
         batch={batchKumis}
         users={users}
-        onFinalizeBatch={handleFinalizeKumisBatch}
+        onFinalizeBatch={() => {
+          handleFinalizeKumisBatch(false);
+          setKumisReviewModalOpen(false);
+          setCurrentView('operator_line_select');
+        }}
         onChangeObservaciones={(obs) =>
           setBatchKumis((prev) => ({ ...prev, observaciones: obs }))
         }
@@ -330,7 +338,11 @@ export default function App() {
         onClose={() => setYogurGriegoReviewModalOpen(false)}
         batch={batchYogurGriego}
         users={users}
-        onFinalizeBatch={handleFinalizeYogurGriegoBatch}
+        onFinalizeBatch={() => {
+          handleFinalizeYogurGriegoBatch(false);
+          setYogurGriegoReviewModalOpen(false);
+          setCurrentView('operator_line_select');
+        }}
         onChangeObservaciones={(obs) =>
           setBatchYogurGriego((prev) => ({ ...prev, observaciones: obs }))
         }
